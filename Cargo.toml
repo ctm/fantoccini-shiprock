@@ -1,9 +1,18 @@
 [package]
-name = "fantoccinni_shiprock"
+name = "fantoccini_shiprock"
 version = "0.1.0"
-authors = ["Clifford T. Matthews <ctm@devctm.com>"]
+authors = ["Clifford T. Matthews <clifford.t.matthews@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+fantoccini = { version = "0.11.7", git = "https://github.com/jonhoo/fantoccini" }
+futures = "0.1.28"
+tokio = "0.1.22"
+serde_json = "1.0.40"
+webdriver = "0.38.1" # NOTE: only need this due to needing "internal" error
+nom = "5.0.0"
+digital-duration-nom = { version = "0.1.0", git = "https://github.com/ctm/digital-duration-nom" }
+serde = { version = "1.0.94", features = ["derive"] }
+structopt = "0.2.18"
