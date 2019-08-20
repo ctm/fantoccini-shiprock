@@ -207,7 +207,7 @@ impl Scraper for Params {
 
     fn doit(
         &self,
-    ) -> Box<Fn(Client) -> Box<Future<Item = Client, Error = CmdError> + Send> + Send> {
+    ) -> Box<dyn Fn(Client) -> Box<dyn Future<Item = Client, Error = CmdError> + Send> + Send> {
         let race_index = self.race_index;
 
         Box::new(move |client| {

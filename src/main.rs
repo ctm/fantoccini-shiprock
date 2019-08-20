@@ -252,5 +252,5 @@ impl FromStr for Event {
 trait Scraper {
     fn url(&self) -> String;
     fn doit(&self)
-        -> Box<Fn(Client) -> Box<Future<Item = Client, Error = CmdError> + Send> + Send>;
+        -> Box<dyn Fn(Client) -> Box<dyn Future<Item = Client, Error = CmdError> + Send> + Send>;
 }
