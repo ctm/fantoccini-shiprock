@@ -1,11 +1,10 @@
 use {
-    crate::{duration_serializer, really_click, take_until_and_consume, Opt, Race, Scraper, Year},
-    digital_duration_nom::duration::Duration,
-    fantoccini::{error::CmdError, Client, Locator::Css},
-    futures::future::{
-        self, Future,
-        Loop::{Break, Continue},
+    crate::{
+        duration_serializer, take_until_and_consume, Opt, Race, ReallyClickable, Scraper, Year,
     },
+    async_trait::async_trait,
+    digital_duration_nom::duration::Duration,
+    fantoccini::{error::CmdError, Client, Element, Locator::Css},
     nom::{
         bytes::complete::{tag, take, take_until},
         combinator::{map, map_res, opt, value},
@@ -45,51 +44,51 @@ impl Params {
     }
 }
 
-fn click_view_all(c: Client, index: usize) -> impl Future<Item = Client, Error = CmdError> {
-    let mut c1 = c.clone();
+async fn click_view_all(mut c: Client, index: usize) -> Result<Client, CmdError> {
+    c = c
+        .wait_for_find(Css("div.col-md-3.col-12>button"))
+        .await?
+        .click()
+        .await?;
 
-    c.wait_for_find(Css("div.col-md-3.col-12>button"))
-        .and_then(|e| e.click())
-        .and_then(|c| c.wait_for_find(Css(".view-all-results")))
-        .and_then(move |_| {
-            c1.find_all(Css(".view-all-results"))
-                .and_then(move |v| really_click(v[index].clone()))
-        })
+    c.clone().wait_for_find(Css(".view-all-results")).await?;
+
+    Ok(c.find_all(Css(".view-all-results"))
+        .await?
+        .remove(index)
+        .really_click()
+        .await?)
 }
 
-fn extract_placements(c: Client) -> impl Future<Item = Client, Error = CmdError> {
-    const BUTTON_CSS: &str = "#pager>div>div>button";
+const BUTTON_CSS: &str = "#pager>div>div>button";
 
-    future::loop_fn(c, |mut this| {
-        let c1 = this.clone();
-        let c2 = this.clone();
-        c2.wait_for_find(Css(BUTTON_CSS)).and_then(|_| {
-            this.source()
-                .and_then(|text| {
-                    if let Ok((_, placements)) = placements(&text) {
-                        println!("{}", serde_json::to_string(&placements).unwrap());
-                    }
-                    future::ok(this)
-                })
-                .and_then(|mut c| c.find_all(Css(BUTTON_CSS)))
-                .and_then(|v| {
-                    // NOTE: The unwrap here is safe, because we already
-                    //       did a wait_for_find on BUTTON_CSS.  However,
-                    //       it won't work if we refactor and want to
-                    //       support single page results.
-                    let mut e = v.last().unwrap().clone();
+async fn print_placements(mut c: Client) -> Result<(), CmdError> {
+    c.clone().wait_for_find(Css(BUTTON_CSS)).await?;
+    let text = c.source().await?;
+    if let Ok((_, placements)) = placements(&text) {
+        println!("{}", serde_json::to_string(&placements).unwrap());
+    }
+    Ok(())
+}
 
-                    e.html(true).and_then(move |html| {
-                        if html == "&gt;" {
-                            e.click();
-                            Ok(Continue(c1))
-                        } else {
-                            Ok(Break(c1))
-                        }
-                    })
-                })
-        })
-    })
+async fn next_button(mut c: Client) -> Result<Option<Element>, CmdError> {
+    let buttons = c.find_all(Css(BUTTON_CSS)).await?;
+    let mut e = buttons.last().unwrap().clone();
+    let done = e.html(true).await? != "&gt;";
+    Ok(if done { None } else { Some(e) })
+}
+
+async fn extract_placements(c: Client) -> Result<Client, CmdError> {
+    let mut button;
+
+    while {
+        print_placements(c.clone()).await?;
+        button = next_button(c.clone()).await?;
+        button.is_some()
+    } {
+        button.unwrap().click().await?;
+    }
+    Ok(c)
 }
 
 #[derive(Serialize)]
@@ -200,18 +199,17 @@ fn parsed_after_n_close_elements<'a, O: FromStr>(
     map_res(after_n_close_elements(count), |string| string.parse())
 }
 
+#[async_trait]
 impl Scraper for Params {
     fn url(&self) -> String {
         self.url.to_string()
     }
 
-    fn doit(
-        &self,
-    ) -> Box<dyn Fn(Client) -> Box<dyn Future<Item = Client, Error = CmdError> + Send> + Send> {
+    async fn doit(&self, mut client: Client) -> Result<Client, CmdError> {
         let race_index = self.race_index;
 
-        Box::new(move |client| {
-            Box::new(click_view_all(client, race_index).and_then(extract_placements))
-        })
+        client = click_view_all(client, race_index).await?;
+        client = extract_placements(client).await?;
+        Ok(client)
     }
 }

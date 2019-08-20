@@ -1,15 +1,9 @@
 use {
+    async_trait::async_trait,
     digital_duration_nom::duration::Duration,
     fantoccini::{
-        error::{
-            self,
-            CmdError::{self, Standard},
-        },
+        error::CmdError::{self, Standard},
         Client, Element,
-    },
-    futures::future::{
-        self, Future,
-        Loop::{Break, Continue},
     },
     nom::{
         bytes::complete::{take, take_until},
@@ -28,7 +22,8 @@ use {
 mod athlinks;
 mod chronotrack;
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), CmdError> {
     let opt = Opt::from_args();
 
     let mut caps = serde_json::map::Map::new();
@@ -40,62 +35,43 @@ fn main() {
     };
     caps.insert("moz:firefoxOptions".to_string(), firefox_opts);
 
-    let c = Client::with_capabilities("http://localhost:4444", caps);
+    let mut c = Client::with_capabilities("http://localhost:4444", caps)
+        .await
+        .unwrap_or_else(|e| panic!("failed to connect to WebDriver: {}", e));
 
-    let shiprock;
-    let rtfz;
-
-    let scraper: &(dyn Scraper + Sync) = match opt.event {
-        Event::Shiprock => {
-            shiprock = chronotrack::Params::new(opt);
-            &shiprock
-        }
-        Event::Rftz => {
-            rtfz = athlinks::Params::new(opt);
-            &rtfz
-        }
+    let scraper: Box<dyn Scraper + Sync> = match opt.event {
+        Event::Shiprock => Box::new(chronotrack::Params::new(opt)),
+        Event::Rftz => Box::new(athlinks::Params::new(opt)),
     };
 
     let url = scraper.url();
-    let doit = scraper.doit();
 
-    tokio::run(
-        c.map_err(|e| unimplemented!("failed to connect to WebDriver: {:?}", e))
-            .and_then(move |c| c.goto(&url))
-            // NOTE: I'm surprised we need the persist, but we do.
-            // It's not yet in a released version though, so we have
-            // to pull in the crate from GitHub
-            .and_then(|mut c| {
-                c.persist();
-                future::ok(c)
-            })
-            .and_then(move |c| doit(c))
-            .and_then(|mut c| c.close())
-            .map_err(|e| {
-                panic!("a WebDriver command failed: {:?}", e);
-            }),
-    );
+    c.goto(&url).await?;
+    c.persist().await?;
+    c = scraper.doit(c).await?;
+    c.close().await
 }
 
-// Fantoccini helper
+#[async_trait]
+trait ReallyClickable {
+    async fn really_click(self) -> Result<Client, CmdError>;
+}
 
-// Click an element and don't stop unless it succeeds or the error is
-// something other than it being non-interactable.
-fn really_click(e: Element) -> impl Future<Item = Client, Error = error::CmdError> {
-    future::loop_fn(e, |this| {
-        let e1 = this.clone();
-        this.click().map(Break).or_else(move |e| {
-            if let Standard(WebDriverError {
+#[async_trait]
+impl ReallyClickable for Element {
+    async fn really_click(self) -> Result<Client, CmdError> {
+        loop {
+            let res = self.clone().click().await;
+            if let Err(Standard(WebDriverError {
                 error: ElementNotInteractable,
                 ..
-            }) = e
+            })) = res
             {
-                Ok(Continue(e1))
             } else {
-                Err(e)
+                return res;
             }
-        })
-    })
+        }
+    }
 }
 
 fn duration_serializer<S: Serializer>(v: &Duration, s: S) -> Result<S::Ok, S::Error> {
@@ -249,8 +225,8 @@ impl FromStr for Event {
     }
 }
 
+#[async_trait]
 trait Scraper {
     fn url(&self) -> String;
-    fn doit(&self)
-        -> Box<dyn Fn(Client) -> Box<dyn Future<Item = Client, Error = CmdError> + Send> + Send>;
+    async fn doit(&self, client: Client) -> Result<Client, CmdError>;
 }

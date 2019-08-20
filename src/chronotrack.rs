@@ -1,11 +1,10 @@
 use {
-    crate::{duration_serializer, really_click, take_until_and_consume, Opt, Race, Scraper, Year},
-    digital_duration_nom::duration::Duration,
-    fantoccini::{error::CmdError, Client, Locator::Css},
-    futures::future::{
-        self, Either, Future,
-        Loop::{Break, Continue},
+    crate::{
+        duration_serializer, take_until_and_consume, Opt, Race, ReallyClickable, Scraper, Year,
     },
+    async_trait::async_trait,
+    digital_duration_nom::duration::Duration,
+    fantoccini::{error::CmdError, Client, Element, Locator::Css},
     nom::{
         bytes::complete::{tag, take_until},
         character::complete::{multispace0, multispace1},
@@ -18,73 +17,65 @@ use {
     std::{collections::HashMap, num::NonZeroU16, str::FromStr},
 };
 
-// Fantoccini futures
-
-fn click_the_results_tab(c: Client) -> impl Future<Item = Client, Error = CmdError> {
-    c.wait_for_find(Css("#resultsResultsTab"))
-        .and_then(really_click)
+async fn click_the_results_tab(c: Client) -> Result<Client, CmdError> {
+    Ok(c.wait_for_find(Css("#resultsResultsTab"))
+        .await?
+        .really_click()
+        .await?)
 }
 
-fn choose_the_race(
-    mut c: Client,
-    menu_item: &'static str,
-) -> impl Future<Item = Client, Error = CmdError> {
-    c.find(Css("#bazu-full-results-races"))
-        .and_then(move |mut e| {
-            e.html(true).and_then(move |html| {
-                let value_map = value_map_from_options(&html);
-
-                match value_map.get(menu_item) {
-                    None => panic!("Could not find menu item {}", menu_item),
-                    Some((value, selected)) => {
-                        if !selected {
-                            Either::A(e.select_by_value(value))
-                        } else {
-                            Either::B(future::ok(c))
-                        }
-                    }
-                }
-            })
-        })
+async fn choose_the_race(mut c: Client, menu_item: &'static str) -> Result<Client, CmdError> {
+    let mut element = c.find(Css("#bazu-full-results-races")).await?;
+    let html = element.html(true).await?;
+    match value_map_from_options(&html).get(menu_item) {
+        None => panic!("Could not find menu item {}", menu_item),
+        Some((value, selected)) => Ok(if !selected {
+            element.select_by_value(value).await?
+        } else {
+            c
+        }),
+    }
 }
 
-fn choose_100_per_page(mut c: Client) -> impl Future<Item = Client, Error = CmdError> {
-    c.find(Css("#bazu-full-results-paging"))
-        .and_then(|e| e.select_by_value("100"))
+async fn choose_100_per_page(mut c: Client) -> Result<Client, CmdError> {
+    Ok(c.find(Css("#bazu-full-results-paging"))
+        .await?
+        .select_by_value("100")
+        .await?)
 }
 
-fn extract_placements(c: Client) -> impl Future<Item = Client, Error = CmdError> {
-    future::loop_fn(c, |mut this| {
-        let c1 = this.clone();
-        this.source()
-            .and_then(|text| {
-                if let Ok((_, placements)) = placements(&text) {
-                    println!("{}", serde_json::to_string(&placements).unwrap());
-                }
-                future::ok(this)
-            })
-            .and_then(|mut c| c.find(Css("#bazu-full-results-grid_next")))
-            .and_then(|mut e| {
-                // Fantoccini doesn't support the IsEnabled command,
-                // so we check the class, instead
-                e.attr("class")
-                    .and_then(move |classes| {
-                        let mut done = true;
-                        if let Some(classes) = classes {
-                            done = classes.contains("ui-state-disabled");
-                        }
-                        future::ok((e, done))
-                    })
-                    .and_then(move |(e, done)| {
-                        if done {
-                            Ok(Break(c1))
-                        } else {
-                            e.click();
-                            Ok(Continue(c1))
-                        }
-                    })
-            })
+async fn print_placements(mut c: Client) -> Result<(), CmdError> {
+    let text = c.source().await?;
+    if let Ok((_, placements)) = placements(&text) {
+        println!("{}", serde_json::to_string(&placements).unwrap());
+    }
+    Ok(())
+}
+
+async fn next_button(mut c: Client) -> Result<Option<Element>, CmdError> {
+    let mut element = c.find(Css("#bazu-full-results-grid_next")).await?;
+    Ok(if let Some(classes) = element.attr("class").await? {
+        if classes.contains("ui-state-disabled") {
+            None
+        } else {
+            Some(element)
+        }
+    } else {
+        None
     })
+}
+
+async fn extract_placements(c: Client) -> Result<Client, CmdError> {
+    let mut button;
+
+    while {
+        print_placements(c.clone()).await?;
+        button = next_button(c.clone()).await?;
+        button.is_some()
+    } {
+        button.unwrap().click().await?;
+    }
+    Ok(c)
 }
 
 #[derive(Serialize)]
@@ -259,6 +250,7 @@ impl Params {
     }
 }
 
+#[async_trait]
 impl Scraper for Params {
     fn url(&self) -> String {
         use Year::*;
@@ -273,17 +265,12 @@ impl Scraper for Params {
         )
     }
 
-    fn doit(
-        &self,
-    ) -> Box<dyn Fn(Client) -> Box<dyn Future<Item = Client, Error = CmdError> + Send> + Send> {
+    async fn doit(&self, mut client: Client) -> Result<Client, CmdError> {
         let menu_item = self.menu_item;
-        Box::new(move |client| {
-            Box::new(
-                click_the_results_tab(client)
-                    .and_then(move |c| choose_the_race(c, menu_item))
-                    .and_then(choose_100_per_page)
-                    .and_then(extract_placements),
-            )
-        })
+
+        client = click_the_results_tab(client).await?;
+        client = choose_the_race(client, menu_item).await?;
+        client = choose_100_per_page(client).await?;
+        Ok(extract_placements(client).await?)
     }
 }
