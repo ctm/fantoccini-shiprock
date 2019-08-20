@@ -7,11 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-fantoccini = { version = "0.11.7", git = "https://github.com/jonhoo/fantoccini" }
+fantoccini = "0.11.7"
 futures = "0.1.28"
 tokio = "0.1.22"
 serde_json = "1.0.40"
-webdriver = "0.38.1" # NOTE: only need this due to needing "internal" error
+webdriver = "0.39.0" # NOTE: only need this due to needing "internal" error
 nom = "5.0.0"
 digital-duration-nom = { version = "0.1.0", git = "https://github.com/ctm/digital-duration-nom" }
 serde = { version = "1.0.94", features = ["derive"] }
