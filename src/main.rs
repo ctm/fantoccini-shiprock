@@ -24,6 +24,8 @@ mod chronotrack;
 
 #[tokio::main]
 async fn main() -> Result<(), CmdError> {
+    use Event::*;
+
     let opt = Opt::from_args();
 
     let mut caps = serde_json::map::Map::new();
@@ -40,8 +42,8 @@ async fn main() -> Result<(), CmdError> {
         .unwrap_or_else(|e| panic!("failed to connect to WebDriver: {}", e));
 
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
-        Event::Shiprock => Box::new(chronotrack::Params::new(opt)),
-        Event::Rftz => Box::new(athlinks::Params::new(opt)),
+        Shiprock => Box::new(chronotrack::Params::new(opt)),
+        Rftz | Lt100 => Box::new(athlinks::Params::new(opt)),
     };
 
     let url = scraper.url();
@@ -109,7 +111,7 @@ fn take_until_and_consume<'a>(
 #[derive(StructOpt, Debug)]
 #[structopt()]
 pub struct Opt {
-    /// shiprock or rftz
+    /// shiprock, rftz or lt100
     #[structopt(short = "e", long = "event", default_value = "shiprock")]
     pub event: Event,
     /// full, half, relay, 10k, 5k or handcycle
@@ -200,6 +202,7 @@ impl FromStr for Year {
 pub enum Event {
     Shiprock,
     Rftz,
+    Lt100,
 }
 
 #[derive(Debug)]
@@ -207,7 +210,7 @@ pub struct ParseEventError;
 
 impl Display for ParseEventError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "choose \"shiprock\", or \"rftz\"")
+        write!(f, "choose \"shiprock\", \"rftz\" or \"lt100\"")
     }
 }
 
@@ -220,6 +223,7 @@ impl FromStr for Event {
         match s {
             "shiprock" => Ok(Shiprock),
             "rftz" => Ok(Rftz),
+            "lt100" => Ok(Lt100),
             _ => Err(ParseEventError),
         }
     }

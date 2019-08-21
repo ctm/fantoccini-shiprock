@@ -1,6 +1,7 @@
 use {
     crate::{
-        duration_serializer, take_until_and_consume, Opt, Race, ReallyClickable, Scraper, Year,
+        duration_serializer, take_until_and_consume, Event, Opt, Race, ReallyClickable, Scraper,
+        Year,
     },
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
@@ -26,6 +27,16 @@ pub struct Params {
 
 impl Params {
     pub fn new(opt: Opt) -> Self {
+        use Event::*;
+
+        match opt.event {
+            Rftz => Self::new_rtfz(opt),
+            Lt100 => Self::new_lt100(opt),
+            _ => panic!("{:?} is not athlinks", opt.event),
+        }
+    }
+
+    fn new_rtfz(opt: Opt) -> Self {
         use {Race::*, Year::*};
 
         let url = match opt.year {
@@ -41,6 +52,22 @@ impl Params {
         };
 
         Self { url, race_index }
+    }
+
+    fn new_lt100(opt: Opt) -> Self {
+        use {Race::*, Year::*};
+
+        let url = match opt.year {
+            Y2019 => "https://www.athlinks.com/event/33913/results/Event/711340/Results",
+            _ => panic!("We currently only scrape LT100 2019"),
+        };
+
+        if let Full = opt.race {
+        } else {
+            panic!("Only the full is available");
+        }
+
+        Self { url, race_index: 0 }
     }
 }
 
