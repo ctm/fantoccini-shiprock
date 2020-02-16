@@ -261,6 +261,7 @@ impl Scraper for Params {
                 Y2017 => "24236",
                 Y2018 => "33304",
                 Y2019 => "40479",
+                Y2020 => panic!("2020 not available yet"),
             }
         )
     }

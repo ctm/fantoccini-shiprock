@@ -21,6 +21,7 @@ use {
 
 mod athlinks;
 mod chronotrack;
+mod runsignup;
 
 #[tokio::main]
 async fn main() -> Result<(), CmdError> {
@@ -44,6 +45,7 @@ async fn main() -> Result<(), CmdError> {
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
         Shiprock => Box::new(chronotrack::Params::new(opt)),
         Rftz | Lt100 => Box::new(athlinks::Params::new(opt)),
+        MtTaylorQuad => Box::new(runsignup::Params::new(opt)),
     };
 
     let url = scraper.url();
@@ -117,7 +119,7 @@ pub struct Opt {
     /// full, half, relay, 10k, 5k or handcycle
     #[structopt(short = "r", long = "race", default_value = "full")]
     pub race: Race,
-    /// 2017, 2018 or 2019
+    /// 2017, 2018, 2019 or 2020
     #[structopt(short = "y", long = "year", default_value = "2019")]
     pub year: Year,
     /// See the webpage as results are gathered
@@ -172,6 +174,7 @@ pub enum Year {
     Y2017,
     Y2018,
     Y2019,
+    Y2020,
 }
 
 #[derive(Debug)]
@@ -193,6 +196,7 @@ impl FromStr for Year {
             "2017" => Ok(Y2017),
             "2018" => Ok(Y2018),
             "2019" => Ok(Y2019),
+            "2020" => Ok(Y2020),
             _ => Err(ParseYearError),
         }
     }
@@ -203,6 +207,7 @@ pub enum Event {
     Shiprock,
     Rftz,
     Lt100,
+    MtTaylorQuad,
 }
 
 #[derive(Debug)]
@@ -224,6 +229,7 @@ impl FromStr for Event {
             "shiprock" => Ok(Shiprock),
             "rftz" => Ok(Rftz),
             "lt100" => Ok(Lt100),
+            "quad" => Ok(MtTaylorQuad),
             _ => Err(ParseEventError),
         }
     }
