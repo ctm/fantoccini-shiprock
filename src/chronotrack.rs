@@ -17,7 +17,7 @@ use {
     std::{collections::HashMap, num::NonZeroU16, str::FromStr},
 };
 
-async fn click_the_results_tab(c: Client) -> Result<Client, CmdError> {
+async fn click_the_results_tab(mut c: Client) -> Result<Client, CmdError> {
     Ok(c.wait_for_find(Css("#resultsResultsTab"))
         .await?
         .really_click()
