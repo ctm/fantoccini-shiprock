@@ -170,12 +170,12 @@ fn tr(input: &str) -> IResult<&str, ()> {
 }
 
 #[allow(clippy::needless_lifetimes)]
-fn parsed_td<'a, O: FromStr>(to_match: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, O> {
+fn parsed_td<'a, O: FromStr>(to_match: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, O> {
     map_res(td(to_match), |string| string.parse())
 }
 
 #[allow(clippy::needless_lifetimes)]
-fn td<'a>(to_match: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, &'a str> + '_ {
+fn td<'a>(to_match: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> + '_ {
     preceded(
         tuple((
             multispace0,

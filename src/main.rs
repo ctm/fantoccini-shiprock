@@ -102,7 +102,7 @@ fn duration_serializer<S: Serializer>(v: &Duration, s: S) -> Result<S::Ok, S::Er
 #[allow(clippy::needless_lifetimes)]
 fn take_until_and_consume<'a>(
     tag_to_match: &'a str,
-) -> impl Fn(&'a str) -> IResult<&'a str, &'a str> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     let len = tag_to_match.len();
 
     terminated(take_until(tag_to_match), take(len))

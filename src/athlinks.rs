@@ -212,17 +212,17 @@ fn placement(input: &str) -> IResult<&str, Placement> {
     )(input)
 }
 
-fn close_elem<'a>(count: usize) -> impl Fn(&'a str) -> IResult<&'a str, ()> {
+fn close_elem<'a>(count: usize) -> impl FnMut(&'a str) -> IResult<&'a str, ()> {
     value((), many_m_n(count, count, take_until_and_consume(">")))
 }
 
-fn after_n_close_elements<'a>(count: usize) -> impl Fn(&'a str) -> IResult<&'a str, &'a str> {
+fn after_n_close_elements<'a>(count: usize) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     preceded(close_elem(count), take_until("<"))
 }
 
 fn parsed_after_n_close_elements<'a, O: FromStr>(
     count: usize,
-) -> impl Fn(&'a str) -> IResult<&'a str, O> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, O> {
     map_res(after_n_close_elements(count), |string| string.parse())
 }
 
