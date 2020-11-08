@@ -1,10 +1,12 @@
 use {
     crate::{
-        duration_serializer, take_until_and_consume, Opt, Race, ReallyClickable, Scraper, Year,
+        duration_serializer, take_until_and_consume, Opt, Race, ReallyClickable, Scraper,
+        Year as OptYear,
     },
+    anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{error::CmdError, Client, Element, Locator::Css},
+    fantoccini::{Client, Element, Locator::Css},
     nom::{
         bytes::complete::{tag, take_until},
         character::complete::{multispace0, multispace1},
@@ -14,21 +16,28 @@ use {
         IResult,
     },
     serde::Serialize,
-    std::{collections::HashMap, num::NonZeroU16, str::FromStr},
+    std::{
+        collections::HashMap,
+        convert::{TryFrom, TryInto},
+        error::Error,
+        fmt::{self, Display, Formatter},
+        num::NonZeroU16,
+        str::FromStr,
+    },
 };
 
-async fn click_the_results_tab(mut c: Client) -> Result<Client, CmdError> {
+async fn click_the_results_tab(mut c: Client) -> AResult<Client> {
     Ok(c.wait_for_find(Css("#resultsResultsTab"))
         .await?
         .really_click()
         .await?)
 }
 
-async fn choose_the_race(mut c: Client, menu_item: &'static str) -> Result<Client, CmdError> {
+async fn choose_the_race(mut c: Client, menu_item: &'static str) -> AResult<Client> {
     let mut element = c.find(Css("#bazu-full-results-races")).await?;
     let html = element.html(true).await?;
-    match value_map_from_options(&html).get(menu_item) {
-        None => panic!("Could not find menu item {}", menu_item),
+    match value_map_from_options(&html)?.get(menu_item) {
+        None => bail!("Could not find menu item {}", menu_item),
         Some((value, selected)) => Ok(if !selected {
             element.select_by_value(value).await?
         } else {
@@ -37,14 +46,14 @@ async fn choose_the_race(mut c: Client, menu_item: &'static str) -> Result<Clien
     }
 }
 
-async fn choose_100_per_page(mut c: Client) -> Result<Client, CmdError> {
+async fn choose_100_per_page(mut c: Client) -> AResult<Client> {
     Ok(c.find(Css("#bazu-full-results-paging"))
         .await?
         .select_by_value("100")
         .await?)
 }
 
-async fn print_placements(mut c: Client) -> Result<(), CmdError> {
+async fn print_placements(mut c: Client) -> AResult<()> {
     let text = c.source().await?;
     if let Ok((_, placements)) = placements(&text) {
         println!("{}", serde_json::to_string(&placements).unwrap());
@@ -52,7 +61,7 @@ async fn print_placements(mut c: Client) -> Result<(), CmdError> {
     Ok(())
 }
 
-async fn next_button(mut c: Client) -> Result<Option<Element>, CmdError> {
+async fn next_button(mut c: Client) -> AResult<Option<Element>> {
     let mut element = c.find(Css("#bazu-full-results-grid_next")).await?;
     Ok(if let Some(classes) = element.attr("class").await? {
         if classes.contains("ui-state-disabled") {
@@ -65,7 +74,7 @@ async fn next_button(mut c: Client) -> Result<Option<Element>, CmdError> {
     })
 }
 
-async fn extract_placements(c: Client) -> Result<Client, CmdError> {
+async fn extract_placements(c: Client) -> AResult<Client> {
     let mut button;
 
     while {
@@ -197,8 +206,8 @@ fn close_tr(input: &str) -> IResult<&str, ()> {
 
 type ValueMap<'a> = HashMap<&'a str, (&'a str, bool)>;
 
-fn value_map_from_options(input: &str) -> ValueMap {
-    map(all_consuming(many1(option)), |v| {
+fn value_map_from_options(input: &str) -> AResult<ValueMap> {
+    Ok(map(all_consuming(many1(option)), |v| {
         let mut vm = ValueMap::new();
 
         for (value, selected, menu_item) in v {
@@ -206,8 +215,8 @@ fn value_map_from_options(input: &str) -> ValueMap {
         }
         vm
     })(input)
-    .unwrap_or_else(|_| panic!("Could not parse {}", input))
-    .1
+    .map_err(|_| anyhow!("Could not parse {}", input))?
+    .1)
 }
 
 fn option(input: &str) -> IResult<&str, (&str, bool, &str)> {
@@ -236,17 +245,52 @@ fn menu_item_for(race: &Race) -> &'static str {
     }
 }
 
+enum Year {
+    Y2017 = 2017,
+    Y2018,
+    Y2019,
+}
+
+#[derive(Debug)]
+struct UnsupportedYear(OptYear);
+
+impl Display for UnsupportedYear {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "choose \"2017\", \"2018\", or \"2019\"")
+    }
+}
+
+impl Error for UnsupportedYear {}
+
+impl TryFrom<OptYear> for Year {
+    type Error = UnsupportedYear;
+
+    fn try_from(year: OptYear) -> Result<Self, Self::Error> {
+        use Year::*;
+
+        match year {
+            OptYear::Y2017 => Ok(Y2017),
+            OptYear::Y2018 => Ok(Y2018),
+            OptYear::Y2019 => Ok(Y2019),
+            other => Err(UnsupportedYear(other)),
+        }
+    }
+}
+
 pub struct Params {
     year: Year,
     menu_item: &'static str,
 }
 
 impl Params {
-    pub fn new(opt: Opt) -> Self {
+    pub fn new(opt: Opt) -> AResult<Self> {
         let year = opt.year;
         let menu_item = menu_item_for(&opt.race);
 
-        Self { year, menu_item }
+        Ok(Self {
+            year: year.try_into()?,
+            menu_item,
+        })
     }
 }
 
@@ -257,16 +301,15 @@ impl Scraper for Params {
 
         format!(
             "https://results.chronotrack.com/event/results/event/event-{}",
-            match self.year {
+            match &self.year {
                 Y2017 => "24236",
                 Y2018 => "33304",
                 Y2019 => "40479",
-                Y2020 => panic!("2020 not available yet"),
             }
         )
     }
 
-    async fn doit(&self, mut client: Client) -> Result<Client, CmdError> {
+    async fn doit(&self, mut client: Client) -> AResult<Client> {
         let menu_item = self.menu_item;
 
         client = click_the_results_tab(client).await?;

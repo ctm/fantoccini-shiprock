@@ -3,9 +3,10 @@ use {
         duration_serializer, take_until_and_consume, Event, Opt, Race, ReallyClickable, Scraper,
         Year,
     },
+    anyhow::{bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{error::CmdError, Client, Element, Locator::Css},
+    fantoccini::{Client, Element, Locator::Css},
     nom::{
         bytes::complete::{tag, take, take_until},
         combinator::{map, map_res, opt, value},
@@ -26,52 +27,52 @@ pub struct Params {
 }
 
 impl Params {
-    pub fn new(opt: Opt) -> Self {
+    pub fn new(opt: Opt) -> AResult<Self> {
         use Event::*;
 
         match opt.event {
             Rftz => Self::new_rtfz(opt),
             Lt100 => Self::new_lt100(opt),
-            _ => panic!("{:?} is not athlinks", opt.event),
+            _ => bail!("{:?} is not athlinks", opt.event),
         }
     }
 
-    fn new_rtfz(opt: Opt) -> Self {
+    fn new_rtfz(opt: Opt) -> AResult<Self> {
         use {Race::*, Year::*};
 
         let url = match opt.year {
             Y2019 => "https://www.athlinks.com/event/34346/results/Event/729962/Results",
-            _ => panic!("We currently only scrape Run for the Zoo 2019"),
+            _ => bail!("We currently only scrape Run for the Zoo 2019"),
         };
 
         let race_index = match opt.race {
             TenK => 0,
             Half => 1,
             FiveK => 2,
-            _ => panic!("Only Half, 10kl and 5k are available"),
+            _ => bail!("Only Half, 10kl and 5k are available"),
         };
 
-        Self { url, race_index }
+        Ok(Self { url, race_index })
     }
 
-    fn new_lt100(opt: Opt) -> Self {
+    fn new_lt100(opt: Opt) -> AResult<Self> {
         use {Race::*, Year::*};
 
         let url = match opt.year {
             Y2019 => "https://www.athlinks.com/event/33913/results/Event/711340/Results",
-            _ => panic!("We currently only scrape LT100 2019"),
+            _ => bail!("We currently only scrape LT100 2019"),
         };
 
         if let Full = opt.race {
         } else {
-            panic!("Only the full is available");
+            bail!("Only the full is available");
         }
 
-        Self { url, race_index: 0 }
+        Ok(Self { url, race_index: 0 })
     }
 }
 
-async fn click_view_all(mut c: Client, index: usize) -> Result<Client, CmdError> {
+async fn click_view_all(mut c: Client, index: usize) -> AResult<Client> {
     c = c
         .wait_for_find(Css("div.col-md-3.col-12>button"))
         .await?
@@ -89,7 +90,7 @@ async fn click_view_all(mut c: Client, index: usize) -> Result<Client, CmdError>
 
 const BUTTON_CSS: &str = "#pager>div>div>button";
 
-async fn print_placements(mut c: Client) -> Result<(), CmdError> {
+async fn print_placements(mut c: Client) -> AResult<()> {
     c.clone().wait_for_find(Css(BUTTON_CSS)).await?;
     let text = c.source().await?;
     if let Ok((_, placements)) = placements(&text) {
@@ -98,14 +99,14 @@ async fn print_placements(mut c: Client) -> Result<(), CmdError> {
     Ok(())
 }
 
-async fn next_button(mut c: Client) -> Result<Option<Element>, CmdError> {
+async fn next_button(mut c: Client) -> AResult<Option<Element>> {
     let buttons = c.find_all(Css(BUTTON_CSS)).await?;
     let mut e = buttons.last().unwrap().clone();
     let done = e.html(true).await? != "&gt;";
     Ok(if done { None } else { Some(e) })
 }
 
-async fn extract_placements(c: Client) -> Result<Client, CmdError> {
+async fn extract_placements(c: Client) -> AResult<Client> {
     let mut button;
 
     while {
@@ -232,7 +233,7 @@ impl Scraper for Params {
         self.url.to_string()
     }
 
-    async fn doit(&self, mut client: Client) -> Result<Client, CmdError> {
+    async fn doit(&self, mut client: Client) -> AResult<Client> {
         let race_index = self.race_index;
 
         client = click_view_all(client, race_index).await?;

@@ -1,16 +1,14 @@
 use {
+    anyhow::Result as AResult,
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{
-        error::CmdError::{self, Standard},
-        Client, Element,
-    },
+    fantoccini::{error::CmdError::Standard, Client, Element},
     nom::{
         bytes::complete::{take, take_until},
         sequence::terminated,
         IResult,
     },
-    serde::Serializer,
+    serde::{ser::Error, Serializer},
     std::{
         fmt::{self, Display, Formatter},
         str::FromStr,
@@ -22,9 +20,10 @@ use {
 mod athlinks;
 mod chronotrack;
 mod runsignup;
+mod ultrasignup;
 
 #[tokio::main]
-async fn main() -> Result<(), CmdError> {
+async fn main() -> AResult<()> {
     use Event::*;
 
     let opt = Opt::from_args();
@@ -38,14 +37,13 @@ async fn main() -> Result<(), CmdError> {
     };
     caps.insert("moz:firefoxOptions".to_string(), firefox_opts);
 
-    let mut c = Client::with_capabilities("http://localhost:4444", caps)
-        .await
-        .unwrap_or_else(|e| panic!("failed to connect to WebDriver: {}", e));
+    let mut c = Client::with_capabilities("http://localhost:4444", caps).await?;
 
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
-        Shiprock => Box::new(chronotrack::Params::new(opt)),
-        Rftz | Lt100 => Box::new(athlinks::Params::new(opt)),
-        MtTaylorQuad => Box::new(runsignup::Params::new(opt)),
+        Shiprock => Box::new(chronotrack::Params::new(opt)?),
+        Rftz | Lt100 => Box::new(athlinks::Params::new(opt)?),
+        MtTaylorQuad => Box::new(runsignup::Params::new(opt)?),
+        Moab240 => Box::new(ultrasignup::Params::new(opt)?),
     };
 
     let url = scraper.url();
@@ -53,17 +51,18 @@ async fn main() -> Result<(), CmdError> {
     c.goto(&url).await?;
     c.persist().await?;
     c = scraper.doit(c).await?;
-    c.close().await
+    c.close().await?;
+    Ok(())
 }
 
 #[async_trait]
 trait ReallyClickable {
-    async fn really_click(self) -> Result<Client, CmdError>;
+    async fn really_click(self) -> AResult<Client>;
 }
 
 #[async_trait]
 impl ReallyClickable for Element {
-    async fn really_click(self) -> Result<Client, CmdError> {
+    async fn really_click(self) -> AResult<Client> {
         loop {
             let res = self.clone().click().await;
             if let Err(Standard(WebDriverError {
@@ -72,7 +71,7 @@ impl ReallyClickable for Element {
             })) = res
             {
             } else {
-                return res;
+                return res.map_err(|e| e.into());
             }
         }
     }
@@ -82,7 +81,7 @@ fn duration_serializer<S: Serializer>(v: &Duration, s: S) -> Result<S::Ok, S::Er
     let duration: std::time::Duration = (*v).into();
 
     if duration.subsec_micros() != 0 {
-        panic!("Unexpected fractional seconds");
+        return Err(S::Error::custom("Unserializable fractional seconds"));
     }
     let seconds = duration.as_secs();
     let minutes = seconds / 60;
@@ -113,7 +112,7 @@ fn take_until_and_consume<'a>(
 #[derive(StructOpt, Debug)]
 #[structopt()]
 pub struct Opt {
-    /// shiprock, rftz or lt100
+    /// shiprock, rftz, lt100 or moab240
     #[structopt(short = "e", long = "event", default_value = "shiprock")]
     pub event: Event,
     /// full, half, relay, 10k, 5k or handcycle
@@ -141,7 +140,7 @@ pub enum Race {
 pub struct ParseRaceError;
 
 impl Display for ParseRaceError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "choose \"full\", \"half\", \"relay\", \"10k\", \"5k\" or \"handcycle\""
@@ -161,28 +160,32 @@ impl FromStr for Race {
             "relay" => Ok(Relay),
             "10k" => Ok(TenK),
             "5k" => Ok(FiveK),
-            // FWIW, handcycle was introduced in 2019, so using it with
-            // 2017 or 2018 will result in a panic.
             "handcycle" => Ok(Handcycle),
             _ => Err(ParseRaceError),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Year {
-    Y2017,
+    Y2017 = 2017,
     Y2018,
     Y2019,
     Y2020,
+}
+
+impl Display for Year {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        (*self as i32).fmt(f)
+    }
 }
 
 #[derive(Debug)]
 pub struct ParseYearError;
 
 impl Display for ParseYearError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "choose \"2017\", \"2018\", or \"2019\"")
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "choose \"2017\", \"2018\", \"2019\", or \"2020\"")
     }
 }
 
@@ -208,14 +211,15 @@ pub enum Event {
     Rftz,
     Lt100,
     MtTaylorQuad,
+    Moab240,
 }
 
 #[derive(Debug)]
 pub struct ParseEventError;
 
 impl Display for ParseEventError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "choose \"shiprock\", \"rftz\" or \"lt100\"")
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "choose \"shiprock\", \"rftz\", \"lt100\" or \"moab240\"")
     }
 }
 
@@ -230,6 +234,7 @@ impl FromStr for Event {
             "rftz" => Ok(Rftz),
             "lt100" => Ok(Lt100),
             "quad" => Ok(MtTaylorQuad),
+            "moab240" => Ok(Moab240),
             _ => Err(ParseEventError),
         }
     }
@@ -238,5 +243,5 @@ impl FromStr for Event {
 #[async_trait]
 trait Scraper {
     fn url(&self) -> String;
-    async fn doit(&self, client: Client) -> Result<Client, CmdError>;
+    async fn doit(&self, client: Client) -> AResult<Client>;
 }

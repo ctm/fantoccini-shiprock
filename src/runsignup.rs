@@ -3,9 +3,10 @@
 
 use {
     crate::{duration_serializer, take_until_and_consume, Opt, Scraper, Year},
+    anyhow::{bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{error::CmdError, Client},
+    fantoccini::Client,
     nom::{
         bytes::complete::take_until,
         combinator::{map, map_res},
@@ -19,16 +20,16 @@ use {
 pub struct Params;
 
 impl Params {
-    pub fn new(opt: Opt) -> Self {
+    pub fn new(opt: Opt) -> AResult<Self> {
         match opt.year {
             Year::Y2020 => {}
-            _ => panic!("We currently only scrape The Quad in 2020"),
+            _ => bail!("We currently only scrape The Quad in 2020"),
         };
-        Self
+        Ok(Self)
     }
 }
 
-async fn extract_placements(c: Client) -> Result<Client, CmdError> {
+async fn extract_placements(c: Client) -> AResult<Client> {
     print_placements(c.clone()).await?;
     Ok(c)
 }
@@ -59,7 +60,7 @@ impl Placement {
     }
 }
 
-async fn print_placements(mut c: Client) -> Result<(), CmdError> {
+async fn print_placements(mut c: Client) -> AResult<()> {
     let text = c.source().await?;
     if let Ok((_, placements)) = placements(&text) {
         println!("{}", serde_json::to_string(&placements).unwrap());
@@ -104,7 +105,7 @@ impl Scraper for Params {
         "https://runsignup.com/Race/Results/84435/#resultSetId-189088;perpage:5000".to_string()
     }
 
-    async fn doit(&self, client: Client) -> Result<Client, CmdError> {
+    async fn doit(&self, client: Client) -> AResult<Client> {
         Ok(extract_placements(client).await?)
     }
 }
