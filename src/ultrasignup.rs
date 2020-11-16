@@ -20,19 +20,77 @@ use {
 pub struct Params {
     did: u32,
     year: String,
+    race: Option<String>,
 }
 
 impl Params {
     pub fn new(opt: Opt) -> AResult<Self> {
-        use Event::*;
+        use {Event::*, crate::Year::*};
 
-        match opt.event {
-            Moab240 => Ok(Self {
-                did: 72701,
-                year: opt.year.to_string(),
-            }),
+        let mut race = None;
+        let did = match opt.event {
+            Moab240 => 72701,
+            JJ100 => {
+                if matches!(opt.year, Y2013 | Y2018) {
+                    race = Some("100 Miler".to_string());
+                }
+                74613
+            }
+            DPTR => {
+                match opt.year {
+                    Y2013 => race = Some("50 Miler".to_string()),
+                    Y2020 => race = Some("53 Miler".to_string()),
+                    _ => {}
+                }
+                74837
+            }
+            BosqueBigfoot => {
+                race = Some("50K".to_string());
+                67798
+            }
             e => bail!("{:?} not ultrasignup", e),
+        };
+        Ok(Self {
+            did,
+            year: opt.year.to_string(),
+            race,
+        })
+    }
+
+    async fn optionally_click_on_race(&self, client: Client) -> AResult<Client> {
+        match &self.race {
+            None => Ok(client),
+            Some(race) => self.find_and_click("a.event_link", race, client).await,
         }
+    }
+
+    async fn find_and_click(&self, css: &str, value: &str, mut client: Client) -> AResult<Client> {
+        let link = client
+            .find_all(Css(css))
+            .map_err(Into::<anyhow::Error>::into)
+            .and_then(|v| async move {
+                let stream = stream::iter(v.into_iter()).filter_map(|mut e| async move {
+                    match e.text().await {
+                        Err(err) => Some(Err(Into::<anyhow::Error>::into(err))),
+                        Ok(t) => {
+                            if t == value {
+                                Some(Ok(e))
+                            } else {
+                                None
+                            }
+                        }
+                    }
+                });
+                pin_mut!(stream);
+                stream
+                    .next()
+                    .await
+                    .unwrap_or_else(|| bail!("couldn't find {}", value))
+            })
+            .await?;
+
+        link.clone().click().await?;
+        Ok(client)
     }
 }
 
@@ -58,31 +116,12 @@ impl Scraper for Params {
     }
 
     async fn doit(&self, mut client: Client) -> AResult<Client> {
-        let link = client
-            .find_all(Css("a.year_link"))
-            .map_err(Into::<anyhow::Error>::into)
-            .and_then(|v| async move {
-                let stream = stream::iter(v.into_iter()).filter_map(|mut e| async move {
-                    match e.text().await {
-                        Err(err) => Some(Err(Into::<anyhow::Error>::into(err))),
-                        Ok(t) => {
-                            if t == self.year {
-                                Some(Ok(e))
-                            } else {
-                                None
-                            }
-                        }
-                    }
-                });
-                pin_mut!(stream);
-                stream
-                    .next()
-                    .await
-                    .unwrap_or_else(|| bail!("couldn't find {}", self.year))
-            })
+        client = self
+            .find_and_click("a.year_link", &self.year, client)
             .await?;
+        client = self.optionally_click_on_race(client).await?;
 
-        link.clone().click().await?;
+        tokio::time::delay_for(tokio::time::Duration::from_secs(3)).await;
 
         let placements_or_statuses = client
             .find_all(Css("table#list tbody tr"))
@@ -195,13 +234,17 @@ impl PlacementOrStatus {
                 match v[1].parse() {
                     Err(_) => Ok(None),
                     Ok(place) => {
-                        let time = v[9].parse::<Duration>().or_else(|e| {
-                            if v[9] == "101:46:3" {
-                                "101:46:03".parse()
-                            } else {
-                                Err(e)
-                            }
-                        })?;
+                        let time = if v[9].trim().is_empty() {
+                            Duration::new(0, 0)
+                        } else {
+                            v[9].parse::<Duration>().or_else(|e| {
+                                if v[9] == "101:46:3" {
+                                    "101:46:03".parse()
+                                } else {
+                                    Err(e)
+                                }
+                            })?
+                        };
                         let city = optional_string(&v[4]);
                         let state = optional_string(&v[5]);
                         let age = v[6].parse::<u8>()?.try_into()?;
@@ -227,7 +270,7 @@ impl PlacementOrStatus {
 }
 
 fn optional_string(s: &str) -> Option<String> {
-    if s.is_empty() {
+    if s.trim().is_empty() {
         None
     } else {
         Some(s.to_string())

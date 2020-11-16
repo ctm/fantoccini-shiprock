@@ -43,7 +43,7 @@ async fn main() -> AResult<()> {
         Shiprock => Box::new(chronotrack::Params::new(opt)?),
         Rftz | Lt100 => Box::new(athlinks::Params::new(opt)?),
         MtTaylorQuad => Box::new(runsignup::Params::new(opt)?),
-        Moab240 => Box::new(ultrasignup::Params::new(opt)?),
+        Moab240 | JJ100 | DPTR | BosqueBigfoot => Box::new(ultrasignup::Params::new(opt)?),
     };
 
     let url = scraper.url();
@@ -166,9 +166,17 @@ impl FromStr for Race {
     }
 }
 
+// This is stupid and should be changed.
 #[derive(Clone, Copy, Debug)]
 pub enum Year {
-    Y2017 = 2017,
+    Y2010 = 2010,
+    Y2011,
+    Y2012,
+    Y2013,
+    Y2014,
+    Y2015,
+    Y2016,
+    Y2017,
     Y2018,
     Y2019,
     Y2020,
@@ -185,7 +193,7 @@ pub struct ParseYearError;
 
 impl Display for ParseYearError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "choose \"2017\", \"2018\", \"2019\", or \"2020\"")
+        write!(f, "choose \"2010\" through \"2020\"")
     }
 }
 
@@ -196,6 +204,13 @@ impl FromStr for Year {
         use Year::*;
 
         match s {
+            "2010" => Ok(Y2010),
+            "2011" => Ok(Y2011),
+            "2012" => Ok(Y2012),
+            "2013" => Ok(Y2013),
+            "2014" => Ok(Y2014),
+            "2015" => Ok(Y2015),
+            "2016" => Ok(Y2016),
             "2017" => Ok(Y2017),
             "2018" => Ok(Y2018),
             "2019" => Ok(Y2019),
@@ -212,6 +227,9 @@ pub enum Event {
     Lt100,
     MtTaylorQuad,
     Moab240,
+    JJ100,
+    DPTR,
+    BosqueBigfoot,
 }
 
 #[derive(Debug)]
@@ -235,6 +253,9 @@ impl FromStr for Event {
             "lt100" => Ok(Lt100),
             "quad" => Ok(MtTaylorQuad),
             "moab240" => Ok(Moab240),
+            "jj100" => Ok(JJ100),
+            "dptr" => Ok(DPTR),
+            "bosque" => Ok(BosqueBigfoot),
             _ => Err(ParseEventError),
         }
     }
