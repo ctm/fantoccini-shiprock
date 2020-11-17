@@ -210,12 +210,12 @@ dependencies = [
 
 [[package]]
 name = "digital-duration-nom"
-version = "0.1.1"
-source = "git+https://github.com/ctm/digital-duration-nom#a5b5353a564f1e7d51d11fb9d7d1702f26560e9c"
+version = "0.2.0"
+source = "git+https://github.com/ctm/digital-duration-nom#7806a599b1df6d80e378eefff59dc6706cb5f1c9"
 dependencies = [
  "custom_derive",
  "newtype_derive",
- "nom 5.1.2",
+ "nom",
 ]
 
 [[package]]
@@ -266,7 +266,7 @@ dependencies = [
  "digital-duration-nom",
  "fantoccini",
  "futures",
- "nom 6.0.0",
+ "nom",
  "serde",
  "serde_json",
  "structopt",
@@ -760,17 +760,6 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "5.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffb4262d26ed83a1c0a33a38fe2bb15797329c85770da05e6b828ddb782627af"
-dependencies = [
- "lexical-core",
- "memchr",
- "version_check",
-]
-
-[[package]]
-name = "nom"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4489ccc7d668957ddf64af7cd027c081728903afa6479d35da7e99bf5728f75f"
@@ -1177,9 +1166,9 @@ dependencies = [
 
 [[package]]
 name = "standback"
-version = "0.2.11"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4e0831040d2cf2bdfd51b844be71885783d489898a192f254ae25d57cce725c"
+checksum = "cf906c8b8fc3f6ecd1046e01da1d8ddec83e48c8b08b84dcc02b585a6bedf5a8"
 dependencies = [
  "version_check",
 ]

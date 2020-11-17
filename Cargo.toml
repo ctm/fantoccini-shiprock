@@ -10,8 +10,8 @@ edition = "2018"
 fantoccini = "0.14"
 serde_json = "1.0.40"
 webdriver = "0.41.0" # NOTE: only need this due to needing "internal" error
-nom = "6.0"
-digital-duration-nom = { version = "0.1.0", git = "https://github.com/ctm/digital-duration-nom" }
+nom = "6"
+digital-duration-nom = { version = "0.2.0", git = "https://github.com/ctm/digital-duration-nom" }
 serde = { version = "1.0.94", features = ["derive"] }
 structopt = "0.3.9"
 async-trait = "0.1.10"
