@@ -2,7 +2,7 @@ use {
     anyhow::Result as AResult,
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{error::CmdError::Standard, Client, Element},
+    fantoccini::{elements::Element, error::CmdError::Standard, Client, ClientBuilder},
     nom::{
         bytes::complete::{take, take_until},
         sequence::terminated,
@@ -14,7 +14,6 @@ use {
         str::FromStr,
     },
     structopt::StructOpt,
-    webdriver::error::{ErrorStatus::ElementNotInteractable, WebDriverError},
 };
 
 mod athlinks;
@@ -37,7 +36,12 @@ async fn main() -> AResult<()> {
     };
     caps.insert("moz:firefoxOptions".to_string(), firefox_opts);
 
-    let mut c = Client::with_capabilities("http://localhost:4444", caps).await?;
+    // let mut c = Client::with_capabilities("http://localhost:4444", caps).await?;
+
+    let c = ClientBuilder::native()
+        .capabilities(caps)
+        .connect("http://localhost:4444")
+        .await?;
 
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
         Shiprock => Box::new(chronotrack::Params::new(opt)?),
@@ -50,27 +54,26 @@ async fn main() -> AResult<()> {
 
     c.goto(&url).await?;
     c.persist().await?;
-    c = scraper.doit(c).await?;
+    scraper.doit(&c).await?;
     c.close().await?;
     Ok(())
 }
 
 #[async_trait]
 trait ReallyClickable {
-    async fn really_click(self) -> AResult<Client>;
+    async fn really_click(self) -> AResult<()>;
 }
 
 #[async_trait]
 impl ReallyClickable for Element {
-    async fn really_click(self) -> AResult<Client> {
+    async fn really_click(self) -> AResult<()> {
         loop {
-            let res = self.clone().click().await;
-            if let Err(Standard(WebDriverError {
-                error: ElementNotInteractable,
-                ..
-            })) = res
-            {
-            } else {
+            let res = self.click().await;
+            let mut need_to_return = true;
+            if let Err(Standard(ref wd)) = res {
+                need_to_return = wd.error() != "element not interactable";
+            }
+            if need_to_return {
                 return res.map_err(|e| e.into());
             }
         }
@@ -264,5 +267,5 @@ impl FromStr for Event {
 #[async_trait]
 trait Scraper {
     fn url(&self) -> String;
-    async fn doit(&self, client: Client) -> AResult<Client>;
+    async fn doit(&self, client: &Client) -> AResult<()>;
 }

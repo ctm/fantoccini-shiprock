@@ -6,7 +6,7 @@ use {
     anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{Client, Element, Locator::Css},
+    fantoccini::{elements::Element, Client, Locator::Css},
     nom::{
         bytes::complete::{tag, take_until},
         character::complete::{multispace0, multispace1},
@@ -26,34 +26,36 @@ use {
     },
 };
 
-async fn click_the_results_tab(mut c: Client) -> AResult<Client> {
-    Ok(c.wait_for_find(Css("#resultsResultsTab"))
+async fn click_the_results_tab(c: &Client) -> AResult<()> {
+    c.wait()
+        .for_element(Css("#resultsResultsTab"))
         .await?
         .really_click()
-        .await?)
+        .await
 }
 
-async fn choose_the_race(mut c: Client, menu_item: &'static str) -> AResult<Client> {
-    let mut element = c.find(Css("#bazu-full-results-races")).await?;
+async fn choose_the_race(c: &Client, menu_item: &'static str) -> AResult<()> {
+    let element = c.find(Css("#bazu-full-results-races")).await?;
     let html = element.html(true).await?;
     match value_map_from_options(&html)?.get(menu_item) {
         None => bail!("Could not find menu item {}", menu_item),
-        Some((value, selected)) => Ok(if !selected {
-            element.select_by_value(value).await?
-        } else {
-            c
-        }),
+        Some((value, selected)) => {
+            if !selected {
+                element.select_by_value(value).await?
+            };
+            Ok(())
+        }
     }
 }
 
-async fn choose_100_per_page(mut c: Client) -> AResult<Client> {
+async fn choose_100_per_page(c: &Client) -> AResult<()> {
     Ok(c.find(Css("#bazu-full-results-paging"))
         .await?
         .select_by_value("100")
         .await?)
 }
 
-async fn print_placements(mut c: Client) -> AResult<()> {
+async fn print_placements(c: &Client) -> AResult<()> {
     let text = c.source().await?;
     if let Ok((_, placements)) = placements(&text) {
         println!("{}", serde_json::to_string(&placements).unwrap());
@@ -61,8 +63,8 @@ async fn print_placements(mut c: Client) -> AResult<()> {
     Ok(())
 }
 
-async fn next_button(mut c: Client) -> AResult<Option<Element>> {
-    let mut element = c.find(Css("#bazu-full-results-grid_next")).await?;
+async fn next_button(c: &Client) -> AResult<Option<Element>> {
+    let element = c.find(Css("#bazu-full-results-grid_next")).await?;
     Ok(if let Some(classes) = element.attr("class").await? {
         if classes.contains("ui-state-disabled") {
             None
@@ -74,17 +76,17 @@ async fn next_button(mut c: Client) -> AResult<Option<Element>> {
     })
 }
 
-async fn extract_placements(c: Client) -> AResult<Client> {
+async fn extract_placements(c: &Client) -> AResult<()> {
     let mut button;
 
     while {
-        print_placements(c.clone()).await?;
-        button = next_button(c.clone()).await?;
+        print_placements(c).await?;
+        button = next_button(c).await?;
         button.is_some()
     } {
         button.unwrap().click().await?;
     }
-    Ok(c)
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -309,12 +311,12 @@ impl Scraper for Params {
         )
     }
 
-    async fn doit(&self, mut client: Client) -> AResult<Client> {
+    async fn doit(&self, client: &Client) -> AResult<()> {
         let menu_item = self.menu_item;
 
-        client = click_the_results_tab(client).await?;
-        client = choose_the_race(client, menu_item).await?;
-        client = choose_100_per_page(client).await?;
+        click_the_results_tab(client).await?;
+        choose_the_race(client, menu_item).await?;
+        choose_100_per_page(client).await?;
         Ok(extract_placements(client).await?)
     }
 }

@@ -6,7 +6,7 @@ use {
     anyhow::{bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{Client, Element, Locator::Css},
+    fantoccini::{elements::Element, Client, Locator::Css},
     nom::{
         bytes::complete::{tag, take, take_until},
         combinator::{map, map_res, opt, value},
@@ -72,26 +72,26 @@ impl Params {
     }
 }
 
-async fn click_view_all(mut c: Client, index: usize) -> AResult<Client> {
-    c = c
-        .wait_for_find(Css("div.col-md-3.col-12>button"))
+async fn click_view_all(c: &Client, index: usize) -> AResult<()> {
+    c.wait()
+        .for_element(Css("div.col-md-3.col-12>button"))
         .await?
         .click()
         .await?;
 
-    c.clone().wait_for_find(Css(".view-all-results")).await?;
+    c.wait().for_element(Css(".view-all-results")).await?;
 
-    Ok(c.find_all(Css(".view-all-results"))
+    c.find_all(Css(".view-all-results"))
         .await?
         .remove(index)
         .really_click()
-        .await?)
+        .await
 }
 
 const BUTTON_CSS: &str = "#pager>div>div>button";
 
-async fn print_placements(mut c: Client) -> AResult<()> {
-    c.clone().wait_for_find(Css(BUTTON_CSS)).await?;
+async fn print_placements(c: &Client) -> AResult<()> {
+    c.wait().for_element(Css(BUTTON_CSS)).await?;
     let text = c.source().await?;
     if let Ok((_, placements)) = placements(&text) {
         println!("{}", serde_json::to_string(&placements).unwrap());
@@ -99,24 +99,24 @@ async fn print_placements(mut c: Client) -> AResult<()> {
     Ok(())
 }
 
-async fn next_button(mut c: Client) -> AResult<Option<Element>> {
+async fn next_button(c: &Client) -> AResult<Option<Element>> {
     let buttons = c.find_all(Css(BUTTON_CSS)).await?;
-    let mut e = buttons.last().unwrap().clone();
+    let e = buttons.last().unwrap();
     let done = e.html(true).await? != "&gt;";
-    Ok(if done { None } else { Some(e) })
+    Ok(if done { None } else { Some(e.clone()) })
 }
 
-async fn extract_placements(c: Client) -> AResult<Client> {
+async fn extract_placements(c: &Client) -> AResult<()> {
     let mut button;
 
     while {
-        print_placements(c.clone()).await?;
-        button = next_button(c.clone()).await?;
+        print_placements(c).await?;
+        button = next_button(c).await?;
         button.is_some()
     } {
         button.unwrap().click().await?;
     }
-    Ok(c)
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -233,11 +233,11 @@ impl Scraper for Params {
         self.url.to_string()
     }
 
-    async fn doit(&self, mut client: Client) -> AResult<Client> {
+    async fn doit(&self, client: &Client) -> AResult<()> {
         let race_index = self.race_index;
 
-        client = click_view_all(client, race_index).await?;
-        client = extract_placements(client).await?;
-        Ok(client)
+        click_view_all(client, race_index).await?;
+        extract_placements(client).await?;
+        Ok(())
     }
 }

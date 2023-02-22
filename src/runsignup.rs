@@ -29,9 +29,9 @@ impl Params {
     }
 }
 
-async fn extract_placements(c: Client) -> AResult<Client> {
-    print_placements(c.clone()).await?;
-    Ok(c)
+async fn extract_placements(c: &Client) -> AResult<()> {
+    print_placements(c).await?;
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -60,7 +60,7 @@ impl Placement {
     }
 }
 
-async fn print_placements(mut c: Client) -> AResult<()> {
+async fn print_placements(c: &Client) -> AResult<()> {
     let text = c.source().await?;
     if let Ok((_, placements)) = placements(&text) {
         println!("{}", serde_json::to_string(&placements).unwrap());
@@ -105,7 +105,7 @@ impl Scraper for Params {
         "https://runsignup.com/Race/Results/84435/#resultSetId-189088;perpage:5000".to_string()
     }
 
-    async fn doit(&self, client: Client) -> AResult<Client> {
+    async fn doit(&self, client: &Client) -> AResult<()> {
         Ok(extract_placements(client).await?)
     }
 }

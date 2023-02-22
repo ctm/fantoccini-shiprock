@@ -3,7 +3,7 @@ use {
     anyhow::{bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{Client, Element, Locator::Css},
+    fantoccini::{elements::Element, Client, Locator::Css},
     futures::{
         pin_mut,
         stream::{self, StreamExt},
@@ -25,7 +25,7 @@ pub struct Params {
 
 impl Params {
     pub fn new(opt: Opt) -> AResult<Self> {
-        use {Event::*, crate::Year::*};
+        use {crate::Year::*, Event::*};
 
         let mut race = None;
         let did = match opt.event {
@@ -57,19 +57,19 @@ impl Params {
         })
     }
 
-    async fn optionally_click_on_race(&self, client: Client) -> AResult<Client> {
+    async fn optionally_click_on_race(&self, client: &Client) -> AResult<()> {
         match &self.race {
-            None => Ok(client),
+            None => Ok(()),
             Some(race) => self.find_and_click("a.event_link", race, client).await,
         }
     }
 
-    async fn find_and_click(&self, css: &str, value: &str, mut client: Client) -> AResult<Client> {
+    async fn find_and_click(&self, css: &str, value: &str, client: &Client) -> AResult<()> {
         let link = client
             .find_all(Css(css))
             .map_err(Into::<anyhow::Error>::into)
             .and_then(|v| async move {
-                let stream = stream::iter(v.into_iter()).filter_map(|mut e| async move {
+                let stream = stream::iter(v.into_iter()).filter_map(|e| async move {
                     match e.text().await {
                         Err(err) => Some(Err(Into::<anyhow::Error>::into(err))),
                         Ok(t) => {
@@ -89,8 +89,8 @@ impl Params {
             })
             .await?;
 
-        link.clone().click().await?;
-        Ok(client)
+        link.click().await?;
+        Ok(())
     }
 }
 
@@ -115,13 +115,12 @@ impl Scraper for Params {
         format!("https://ultrasignup.com/register.aspx?did={}", self.did)
     }
 
-    async fn doit(&self, mut client: Client) -> AResult<Client> {
-        client = self
-            .find_and_click("a.year_link", &self.year, client)
+    async fn doit(&self, client: &Client) -> AResult<()> {
+        self.find_and_click("a.year_link", &self.year, client)
             .await?;
-        client = self.optionally_click_on_race(client).await?;
+        self.optionally_click_on_race(client).await?;
 
-        tokio::time::delay_for(tokio::time::Duration::from_secs(3)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
         let placements_or_statuses = client
             .find_all(Css("table#list tbody tr"))
@@ -139,7 +138,7 @@ impl Scraper for Params {
             "{}",
             serde_json::to_string(&placements_or_statuses).unwrap()
         );
-        Ok(client)
+        Ok(())
     }
 }
 
@@ -210,12 +209,12 @@ enum PlacementOrStatus {
 }
 
 impl PlacementOrStatus {
-    async fn from_element(mut e: Element) -> AResult<Option<Self>> {
+    async fn from_element(e: Element) -> AResult<Option<Self>> {
         e.find_all(Css("td"))
             .map_err(Into::<anyhow::Error>::into)
             .and_then(|v| async move {
                 stream::iter(v.into_iter())
-                    .filter_map(|mut e| async move { Some(e.text().await) })
+                    .filter_map(|e| async move { Some(e.text().await) })
                     .try_collect::<Vec<_>>()
                     .await
                     .map_err(Into::<anyhow::Error>::into)
@@ -277,14 +276,8 @@ fn optional_string(s: &str) -> Option<String> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize)]
 struct StatusesWithPlacements(Vec<(StatusWithCount, Vec<Placement>)>);
-
-impl Default for StatusesWithPlacements {
-    fn default() -> Self {
-        Self(Vec::new())
-    }
-}
 
 impl Extend<PlacementOrStatus> for StatusesWithPlacements {
     fn extend<T: IntoIterator<Item = PlacementOrStatus>>(&mut self, iter: T) {
