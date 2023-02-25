@@ -1,24 +1,12 @@
 use {
-    crate::{
-        duration_serializer, take_until_and_consume, Event, Opt, Race, ReallyClickable, Scraper,
-        Year,
-    },
+    crate::{duration_serializer, Event, Opt, Race, ReallyClickable, Scraper, Year},
     anyhow::{bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
     fantoccini::{elements::Element, Client, Locator::Css},
-    nom::{
-        bytes::complete::{tag, take, take_until},
-        combinator::{map, map_res, opt, value},
-        multi::{many1, many_m_n},
-        sequence::{preceded, tuple},
-        IResult,
-    },
+    futures::stream::{self, StreamExt},
     serde::Serialize,
-    std::{
-        num::{NonZeroU16, NonZeroU8},
-        str::FromStr,
-    },
+    std::num::{NonZeroU16, NonZeroU8},
 };
 
 pub struct Params {
@@ -92,10 +80,11 @@ const BUTTON_CSS: &str = "#pager>div>div>button";
 
 async fn print_placements(c: &Client) -> AResult<()> {
     c.wait().for_element(Css(BUTTON_CSS)).await?;
-    let text = c.source().await?;
-    if let Ok((_, placements)) = placements(&text) {
-        println!("{}", serde_json::to_string(&placements).unwrap());
-    }
+    let placements = stream::iter(c.find_all(Css(".row.mx-0")).await?)
+        .filter_map(Placement::from_element)
+        .collect::<Vec<_>>()
+        .await;
+    println!("{}", serde_json::to_string(&placements).unwrap());
     Ok(())
 }
 
@@ -135,96 +124,87 @@ struct Placement {
     time: Duration,
 }
 
+macro_rules! element_text {
+    ($e:ident, $s:literal) => {
+        $e.find(Css($s)).await.ok()?.text().await.ok()
+    };
+}
+
+macro_rules! elements_text {
+    ($e:ident) => {
+        $e.next()?.text().await.ok()
+    };
+}
+
+macro_rules! parsed_elements_text {
+    ($e:ident) => {
+        elements_text!($e)?.parse().ok()
+    };
+}
+
 impl Placement {
-    // new takes its arguments as a tuple so that it has a single argument and
-    // hence can be used as the second argument to map.
-    #[allow(clippy::type_complexity)]
-    fn new<'a>(
-        (name, sex, age, bib, hometown, rank, gender_rank, division_rank, pace, time): (
-            &'a str,
-            &'a str,
-            Option<NonZeroU8>,
-            &'a str,
-            &'a str,
-            NonZeroU16,
-            NonZeroU16,
-            NonZeroU16,
-            Duration,
-            Duration,
-        ),
-    ) -> Self {
-        let name = name.to_string();
-        let sex = sex.to_string();
-        let bib = bib.to_string();
-        let hometown = hometown.to_string();
-        Self {
-            name,
-            sex,
-            age,
-            bib,
-            hometown,
-            rank,
-            gender_rank,
-            division_rank,
-            pace,
-            time,
+    async fn from_element(e: Element) -> Option<Self> {
+        async fn from_element(e: &Element) -> Option<Placement> {
+            let name = element_text!(e, ".athName")?;
+
+            let (sex, age, bib, hometown) = {
+                let text = element_text!(e, ".col-12")?;
+                let pieces = text.split('\n').collect::<Vec<_>>();
+                if pieces.len() != 3 {
+                    eprintln!("expected three lines in {text}");
+                    return None;
+                }
+                let sub_pieces = pieces[0].split(' ').collect::<Vec<_>>();
+                if sub_pieces.is_empty() || sub_pieces.len() > 2 {
+                    eprintln!("couldn't find age and sex in {text}");
+                    return None;
+                }
+                let sex = sub_pieces[0].to_string();
+                let age = sub_pieces.get(1).and_then(|age| age.parse().ok());
+                let sub_pieces = pieces[1].split(' ').collect::<Vec<_>>();
+                if sub_pieces.len() != 2 || sub_pieces[0] != "Bib" {
+                    eprintln!("couldn't bib in {text}");
+                    return None;
+                }
+                let bib = sub_pieces[1].parse().ok()?;
+                (sex, age, bib, pieces[2].to_string())
+            };
+            let mut es = e.find_all(Css(".px-0")).await.ok()?.into_iter();
+            let rank = parsed_elements_text!(es)?;
+            let gender_rank = parsed_elements_text!(es)?;
+            let division_rank = parsed_elements_text!(es)?;
+            let pace = elements_text!(es)?.split('\n').next()?.parse().ok()?;
+            let time = parsed_elements_text!(es)?;
+            Some(Placement {
+                name,
+                sex,
+                age,
+                bib,
+                hometown,
+                rank,
+                gender_rank,
+                division_rank,
+                pace,
+                time,
+            })
         }
+        let result = from_element(&e).await;
+        if result.is_none() {
+            // If this line is being discarded, we want to dump enough
+            // info to figure out why.  We know we're going to ignore
+            // column headings and DNFs.
+            let text = e.text().await;
+            if let Ok(text) = text.as_ref() {
+                if let Some(last) = text.split('\n').last() {
+                    if last == "DNF" || last == "TIME" {
+                        return None;
+                    }
+                }
+            }
+            eprintln!("discarding {text:?}");
+        }
+        result
     }
-}
-
-// Placement parsers
-
-fn placements(input: &str) -> IResult<&str, Vec<Placement>> {
-    many1(placement)(input)
-}
-
-fn placement(input: &str) -> IResult<&str, Placement> {
-    map(
-        tuple((
-            preceded(
-                // name
-                tuple((
-                    take_until("<div class=\"athName\""),
-                    take_until_and_consume(">"),
-                )),
-                take_until("<"),
-            ),
-            preceded(close_elem(4), take(1usize)), // sex
-            opt(
-                // age
-                map_res(preceded(tag(" "), take_until("<")), |age: &str| age.parse()),
-            ),
-            preceded(take_until_and_consume("Bib "), take_until("<")), // bib
-            after_n_close_elements(3),                                 // city
-            parsed_after_n_close_elements(7),                          // rank
-            parsed_after_n_close_elements(2),                          // gender_rank
-            parsed_after_n_close_elements(2),                          // division_rank
-            parsed_after_n_close_elements(4),                          // pace
-            map_res(
-                preceded(
-                    // time
-                    take_until_and_consume("-->"),
-                    take_until("<"),
-                ),
-                |time| time.parse(),
-            ),
-        )),
-        Placement::new,
-    )(input)
-}
-
-fn close_elem<'a>(count: usize) -> impl FnMut(&'a str) -> IResult<&'a str, ()> {
-    value((), many_m_n(count, count, take_until_and_consume(">")))
-}
-
-fn after_n_close_elements<'a>(count: usize) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
-    preceded(close_elem(count), take_until("<"))
-}
-
-fn parsed_after_n_close_elements<'a, O: FromStr>(
-    count: usize,
-) -> impl FnMut(&'a str) -> IResult<&'a str, O> {
-    map_res(after_n_close_elements(count), |string| string.parse())
 }
 
 #[async_trait]
