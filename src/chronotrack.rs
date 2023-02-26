@@ -1,7 +1,6 @@
 use {
     crate::{
-        duration_serializer, take_until_and_consume, Opt, Race, ReallyClickable, Scraper,
-        Year as OptYear,
+        duration_serializer, take_until_and_consume, Opt, Race, ReallyClickable, Scraper, Year,
     },
     anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
@@ -16,14 +15,7 @@ use {
         IResult,
     },
     serde::Serialize,
-    std::{
-        collections::HashMap,
-        convert::{TryFrom, TryInto},
-        error::Error,
-        fmt::{self, Display, Formatter},
-        num::NonZeroU16,
-        str::FromStr,
-    },
+    std::{collections::HashMap, num::NonZeroU16, str::FromStr},
 };
 
 async fn click_the_results_tab(c: &Client) -> AResult<()> {
@@ -247,66 +239,41 @@ fn menu_item_for(race: &Race) -> &'static str {
     }
 }
 
-enum Year {
-    Y2017 = 2017,
-    Y2018,
-    Y2019,
-}
-
-#[derive(Debug)]
-struct UnsupportedYear(OptYear);
-
-impl Display for UnsupportedYear {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "choose \"2017\", \"2018\", or \"2019\"")
-    }
-}
-
-impl Error for UnsupportedYear {}
-
-impl TryFrom<OptYear> for Year {
-    type Error = UnsupportedYear;
-
-    fn try_from(year: OptYear) -> Result<Self, Self::Error> {
-        use Year::*;
-
-        match year {
-            OptYear::Y2017 => Ok(Y2017),
-            OptYear::Y2018 => Ok(Y2018),
-            OptYear::Y2019 => Ok(Y2019),
-            other => Err(UnsupportedYear(other)),
-        }
-    }
-}
-
 pub struct Params {
     year: Year,
     menu_item: &'static str,
 }
 
 impl Params {
-    pub fn new(opt: Opt) -> AResult<Self> {
+    pub(crate) fn new(opt: Opt) -> AResult<Self> {
         let year = opt.year;
+        if url_for_year(&year).is_none() {
+            bail!("Year {year} is not supported");
+        }
         let menu_item = menu_item_for(&opt.race);
+        Ok(Self { year, menu_item })
+    }
+}
 
-        Ok(Self {
-            year: year.try_into()?,
-            menu_item,
-        })
+fn url_for_year(year: &Year) -> Option<&'static str> {
+    match year.0 {
+        2017 => Some("24236"),
+        2018 => Some("33304"),
+        2019 => Some("40479"),
+        _ => None,
     }
 }
 
 #[async_trait]
 impl Scraper for Params {
     fn url(&self) -> String {
-        use Year::*;
-
         format!(
             "https://results.chronotrack.com/event/results/event/event-{}",
-            match &self.year {
-                Y2017 => "24236",
-                Y2018 => "33304",
-                Y2019 => "40479",
+            match &self.year.0 {
+                2017 => "24236",
+                2018 => "33304",
+                2019 => "40479",
+                year => panic!("Unexpected year: {year}"),
             }
         )
     }

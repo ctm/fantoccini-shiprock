@@ -11,6 +11,7 @@ use {
     serde::{ser::Error, Serializer},
     std::{
         fmt::{self, Display, Formatter},
+        num::ParseIntError,
         str::FromStr,
     },
     structopt::StructOpt,
@@ -112,14 +113,13 @@ fn take_until_and_consume<'a>(
 
 #[derive(StructOpt, Debug)]
 #[structopt()]
-pub struct Opt {
+pub(crate) struct Opt {
     /// shiprock, rftz, lt100 or moab240
     #[structopt(short = "e", long = "event", default_value = "shiprock")]
     pub event: Event,
     /// full, half, relay, 10k, 5k or handcycle
     #[structopt(short = "r", long = "race", default_value = "full")]
     pub race: Race,
-    /// 2017, 2018, 2019 or 2020
     #[structopt(short = "y", long = "year", default_value = "2019")]
     pub year: Year,
     /// See the webpage as results are gathered
@@ -167,57 +167,20 @@ impl FromStr for Race {
     }
 }
 
-// This is stupid and should be changed.
 #[derive(Clone, Copy, Debug)]
-pub enum Year {
-    Y2010 = 2010,
-    Y2011,
-    Y2012,
-    Y2013,
-    Y2014,
-    Y2015,
-    Y2016,
-    Y2017,
-    Y2018,
-    Y2019,
-    Y2020,
-}
+pub(crate) struct Year(u16);
 
 impl Display for Year {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        (*self as i32).fmt(f)
-    }
-}
-
-#[derive(Debug)]
-pub struct ParseYearError;
-
-impl Display for ParseYearError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "choose \"2010\" through \"2020\"")
+        self.0.fmt(f)
     }
 }
 
 impl FromStr for Year {
-    type Err = ParseYearError;
+    type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use Year::*;
-
-        match s {
-            "2010" => Ok(Y2010),
-            "2011" => Ok(Y2011),
-            "2012" => Ok(Y2012),
-            "2013" => Ok(Y2013),
-            "2014" => Ok(Y2014),
-            "2015" => Ok(Y2015),
-            "2016" => Ok(Y2016),
-            "2017" => Ok(Y2017),
-            "2018" => Ok(Y2018),
-            "2019" => Ok(Y2019),
-            "2020" => Ok(Y2020),
-            _ => Err(ParseYearError),
-        }
+        s.parse().map(Self)
     }
 }
 

@@ -1,5 +1,5 @@
 use {
-    crate::{duration_serializer, Event, Opt, Race, ReallyClickable, Scraper, Year},
+    crate::{duration_serializer, Event, Opt, Race, ReallyClickable, Scraper},
     anyhow::{bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
@@ -15,7 +15,7 @@ pub struct Params {
 }
 
 impl Params {
-    pub fn new(opt: Opt) -> AResult<Self> {
+    pub(crate) fn new(opt: Opt) -> AResult<Self> {
         use Event::*;
 
         match opt.event {
@@ -26,10 +26,10 @@ impl Params {
     }
 
     fn new_rtfz(opt: Opt) -> AResult<Self> {
-        use {Race::*, Year::*};
+        use Race::*;
 
-        let url = match opt.year {
-            Y2019 => "https://www.athlinks.com/event/34346/results/Event/729962/Results",
+        let url = match opt.year.0 {
+            2019 => "https://www.athlinks.com/event/34346/results/Event/729962/Results",
             _ => bail!("We currently only scrape Run for the Zoo 2019"),
         };
 
@@ -44,10 +44,10 @@ impl Params {
     }
 
     fn new_lt100(opt: Opt) -> AResult<Self> {
-        use {Race::*, Year::*};
+        use Race::*;
 
-        let url = match opt.year {
-            Y2019 => "https://www.athlinks.com/event/33913/results/Event/711340/Results",
+        let url = match opt.year.0 {
+            2019 => "https://www.athlinks.com/event/33913/results/Event/711340/Results",
             _ => bail!("We currently only scrape LT100 2019"),
         };
 

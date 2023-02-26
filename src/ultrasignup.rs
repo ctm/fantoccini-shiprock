@@ -24,22 +24,22 @@ pub struct Params {
 }
 
 impl Params {
-    pub fn new(opt: Opt) -> AResult<Self> {
-        use {crate::Year::*, Event::*};
+    pub(crate) fn new(opt: Opt) -> AResult<Self> {
+        use Event::*;
 
         let mut race = None;
         let did = match opt.event {
             Moab240 => 72701,
             JJ100 => {
-                if matches!(opt.year, Y2013 | Y2018) {
+                if matches!(opt.year.0, 2013 | 2018) {
                     race = Some("100 Miler".to_string());
                 }
                 74613
             }
             DPTR => {
-                match opt.year {
-                    Y2013 => race = Some("50 Miler".to_string()),
-                    Y2020 => race = Some("53 Miler".to_string()),
+                match opt.year.0 {
+                    2013 => race = Some("50 Miler".to_string()),
+                    2020 => race = Some("53 Miler".to_string()),
                     _ => {}
                 }
                 74837
