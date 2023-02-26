@@ -18,7 +18,6 @@ use {
 
 mod athlinks;
 mod chronotrack;
-mod runsignup;
 mod ultrasignup;
 
 #[tokio::main]
@@ -46,7 +45,6 @@ async fn main() -> AResult<()> {
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
         Shiprock => Box::new(chronotrack::Params::new(opt)?),
         Rftz | Lt100 => Box::new(athlinks::Params::new(opt)?),
-        MtTaylorQuad => Box::new(runsignup::Params::new(opt)?),
         Moab240 | JJ100 | DPTR | BosqueBigfoot => Box::new(ultrasignup::Params::new(opt)?),
     };
 
@@ -228,7 +226,6 @@ pub enum Event {
     Shiprock,
     Rftz,
     Lt100,
-    MtTaylorQuad,
     Moab240,
     JJ100,
     DPTR,
@@ -254,7 +251,6 @@ impl FromStr for Event {
             "shiprock" => Ok(Shiprock),
             "rftz" => Ok(Rftz),
             "lt100" => Ok(Lt100),
-            "quad" => Ok(MtTaylorQuad),
             "moab240" => Ok(Moab240),
             "jj100" => Ok(JJ100),
             "dptr" => Ok(DPTR),
