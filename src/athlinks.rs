@@ -1,17 +1,19 @@
 use {
-    crate::{duration_serializer, Event, Opt, Race, ReallyClickable, Scraper},
-    anyhow::{bail, Result as AResult},
+    crate::{duration_serializer, Event, Opt, Race, ReallyClickable, Scraper, Year},
+    anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
     fantoccini::{elements::Element, Client, Locator::Css},
     futures::stream::{self, StreamExt},
     serde::Serialize,
+    serde_json::value,
     std::num::{NonZeroU16, NonZeroU8},
 };
 
 pub struct Params {
-    url: &'static str,
+    event_id: u32,
     race_index: usize,
+    year: Year,
 }
 
 impl Params {
@@ -28,8 +30,8 @@ impl Params {
     fn new_rtfz(opt: Opt) -> AResult<Self> {
         use Race::*;
 
-        let url = match opt.year.0 {
-            2019 => "https://www.athlinks.com/event/34346/results/Event/729962/Results",
+        let event_id = match opt.year.0 {
+            2019 => 34346,
             _ => bail!("We currently only scrape Run for the Zoo 2019"),
         };
 
@@ -40,23 +42,26 @@ impl Params {
             _ => bail!("Only Half, 10kl and 5k are available"),
         };
 
-        Ok(Self { url, race_index })
+        Ok(Self {
+            event_id,
+            race_index,
+            year: opt.year,
+        })
     }
 
     fn new_lt100(opt: Opt) -> AResult<Self> {
         use Race::*;
-
-        let url = match opt.year.0 {
-            2019 => "https://www.athlinks.com/event/33913/results/Event/711340/Results",
-            _ => bail!("We currently only scrape LT100 2019"),
-        };
 
         if let Full = opt.race {
         } else {
             bail!("Only the full is available");
         }
 
-        Ok(Self { url, race_index: 0 })
+        Ok(Self {
+            event_id: 33913,
+            race_index: 0,
+            year: opt.year,
+        })
     }
 }
 
@@ -207,17 +212,82 @@ impl Placement {
     }
 }
 
+async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResult<()> {
+    let e = c.wait().for_element(Css(selector)).await.map_err(|e| {
+        let message = format!("Couldn't find {selector}: {e:?}");
+        eprintln!("{}", message);
+        anyhow!(message)
+    })?;
+
+    if let Some(class) = e.attr("class").await? {
+        if class.contains("Mui-disabled") {
+            return Ok(());
+        }
+    }
+
+    c.execute("arguments[0].scrollIntoView()", vec![value::to_value(&e)?])
+        .await?;
+    e.click().await?;
+
+    let e = c
+        .wait()
+        .for_element(Css("div.MuiPopover-paper ul"))
+        .await
+        .map_err(|e| {
+            let message = format!("Couldn't find popover {selector}: {e:?}");
+            eprintln!("{}", message);
+            anyhow!(message)
+        })?;
+
+    let mut stream = stream::iter(e.find_all(Css("li")).await?);
+    let mut found = None;
+    while {
+        let e;
+        (e, stream) = stream.into_future().await;
+        match e {
+            None => false,
+            Some(e) => match e.text().await {
+                Err(e) => {
+                    eprintln!("trouble with stream: {e:?}");
+                    false
+                }
+                Ok(t) => {
+                    if containing.iter().any(|c| t.contains(c)) {
+                        found = Some(e);
+                        false
+                    } else {
+                        true
+                    }
+                }
+            },
+        }
+    } {}
+    match found {
+        None => bail!("Could not find {selector} {:?}", containing),
+        Some(e) => e.click().await?,
+    }
+    Ok(())
+}
+
+async fn select_year(c: &Client, year: Year) -> AResult<()> {
+    let year = year.to_string();
+    pop_up_select(c, "#eventDate", &[&year[..]]).await
+}
+
+async fn select_full_course(c: &Client) -> AResult<()> {
+    pop_up_select(c, "#split", &["Full Course", "Finish"]).await
+}
+
 #[async_trait]
 impl Scraper for Params {
     fn url(&self) -> String {
-        self.url.to_string()
+        format!("https://www.athlinks.com/event/{}/results", self.event_id)
     }
 
     async fn doit(&self, client: &Client) -> AResult<()> {
-        let race_index = self.race_index;
-
-        click_view_all(client, race_index).await?;
-        extract_placements(client).await?;
-        Ok(())
+        select_year(client, self.year).await?;
+        click_view_all(client, self.race_index).await?;
+        select_full_course(client).await?;
+        extract_placements(client).await
     }
 }
