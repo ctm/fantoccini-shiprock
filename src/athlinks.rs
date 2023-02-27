@@ -172,7 +172,8 @@ fn extract_sex_et_al(pieces: &[&str]) -> Option<(String, Option<NonZeroU8>, Stri
     let sex = sub_pieces[0].to_string();
     let age = sub_pieces.get(1).and_then(|age| age.parse().ok());
     let bib = pieces[1].strip_prefix("Bib ").unwrap_or("").to_string();
-    Some((sex, age, bib, pieces[2].to_string()))
+    let hometown = pieces[2].to_string();
+    Some((sex, age, bib, hometown))
 }
 
 impl Placement {
