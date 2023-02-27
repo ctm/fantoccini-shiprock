@@ -147,6 +147,34 @@ macro_rules! parsed_elements_text {
     };
 }
 
+fn extract_sex_et_al(pieces: &[&str]) -> Option<(String, Option<NonZeroU8>, String, String)> {
+    let new_pieces;
+    let pieces = if pieces.len() == 2 {
+        new_pieces = [pieces[0], "", pieces[1]];
+        &new_pieces
+    } else {
+        pieces
+    };
+    if pieces.len() != 3 {
+        eprintln!("expected three pieces in {pieces:?}");
+        return None;
+    }
+    let sub_pieces = pieces[0].split(' ').collect::<Vec<_>>();
+    let sub_pieces = match sub_pieces.len() {
+        0 => ["", ""],
+        1 => [sub_pieces[0], ""],
+        2 => [sub_pieces[0], sub_pieces[1]],
+        _ => {
+            eprintln!("don't know what to do with sub_pieces: {sub_pieces:?}");
+            return None;
+        }
+    };
+    let sex = sub_pieces[0].to_string();
+    let age = sub_pieces.get(1).and_then(|age| age.parse().ok());
+    let bib = pieces[1].strip_prefix("Bib ").unwrap_or("").to_string();
+    Some((sex, age, bib, pieces[2].to_string()))
+}
+
 impl Placement {
     async fn from_element(e: Element) -> Option<Self> {
         async fn from_element(e: &Element) -> Option<Placement> {
@@ -155,24 +183,7 @@ impl Placement {
             let (sex, age, bib, hometown) = {
                 let text = element_text!(e, ".col-12")?;
                 let pieces = text.split('\n').collect::<Vec<_>>();
-                if pieces.len() != 3 {
-                    eprintln!("expected three lines in {text}");
-                    return None;
-                }
-                let sub_pieces = pieces[0].split(' ').collect::<Vec<_>>();
-                if sub_pieces.is_empty() || sub_pieces.len() > 2 {
-                    eprintln!("couldn't find age and sex in {text}");
-                    return None;
-                }
-                let sex = sub_pieces[0].to_string();
-                let age = sub_pieces.get(1).and_then(|age| age.parse().ok());
-                let sub_pieces = pieces[1].split(' ').collect::<Vec<_>>();
-                if sub_pieces.len() != 2 || sub_pieces[0] != "Bib" {
-                    eprintln!("couldn't bib in {text}");
-                    return None;
-                }
-                let bib = sub_pieces[1].parse().ok()?;
-                (sex, age, bib, pieces[2].to_string())
+                extract_sex_et_al(&pieces)?
             };
             let mut es = e.find_all(Css(".px-0")).await.ok()?.into_iter();
             let rank = parsed_elements_text!(es)?;
