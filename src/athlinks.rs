@@ -69,7 +69,7 @@ async fn click_view_all(c: &Client, index: usize) -> AResult<()> {
     c.wait()
         .for_element(Css("div.col-md-3.col-12>button"))
         .await?
-        .click()
+        .really_click(c)
         .await?;
 
     c.wait().for_element(Css(".view-all-results")).await?;
@@ -77,7 +77,7 @@ async fn click_view_all(c: &Client, index: usize) -> AResult<()> {
     c.find_all(Css(".view-all-results"))
         .await?
         .remove(index)
-        .really_click()
+        .really_click(c)
         .await
 }
 
@@ -121,7 +121,7 @@ struct Placement {
     bib: String,
     hometown: String,
     rank: NonZeroU16,
-    gender_rank: NonZeroU16,
+    gender_rank: Option<NonZeroU16>,
     division_rank: NonZeroU16,
     #[serde(serialize_with = "duration_serializer")]
     pace: Duration,
@@ -188,7 +188,7 @@ impl Placement {
             };
             let mut es = e.find_all(Css(".px-0")).await.ok()?.into_iter();
             let rank = parsed_elements_text!(es)?;
-            let gender_rank = parsed_elements_text!(es)?;
+            let gender_rank = parsed_elements_text!(es);
             let division_rank = parsed_elements_text!(es)?;
             let pace = elements_text!(es)?.split('\n').next()?.parse().ok()?;
             let time = parsed_elements_text!(es)?;

@@ -2,13 +2,14 @@ use {
     anyhow::Result as AResult,
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{elements::Element, error::CmdError::Standard, Client, ClientBuilder},
+    fantoccini::{elements::Element, Client, ClientBuilder},
     nom::{
         bytes::complete::{take, take_until},
         sequence::terminated,
         IResult,
     },
     serde::{ser::Error, Serializer},
+    serde_json::value,
     std::{
         fmt::{self, Display, Formatter},
         num::ParseIntError,
@@ -60,22 +61,16 @@ async fn main() -> AResult<()> {
 
 #[async_trait]
 trait ReallyClickable {
-    async fn really_click(self) -> AResult<()>;
+    async fn really_click(&self, client: &Client) -> AResult<()>;
 }
 
 #[async_trait]
 impl ReallyClickable for Element {
-    async fn really_click(self) -> AResult<()> {
-        loop {
-            let res = self.click().await;
-            let mut need_to_return = true;
-            if let Err(Standard(ref wd)) = res {
-                need_to_return = wd.error() != "element not interactable";
-            }
-            if need_to_return {
-                return res.map_err(|e| e.into());
-            }
-        }
+    async fn really_click(&self, client: &Client) -> AResult<()> {
+        client
+            .execute("arguments[0].click()", vec![value::to_value(self)?])
+            .await?;
+        Ok(())
     }
 }
 

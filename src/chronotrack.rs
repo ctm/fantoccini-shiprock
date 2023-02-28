@@ -22,7 +22,7 @@ async fn click_the_results_tab(c: &Client) -> AResult<()> {
     c.wait()
         .for_element(Css("#resultsResultsTab"))
         .await?
-        .really_click()
+        .really_click(c)
         .await
 }
 
