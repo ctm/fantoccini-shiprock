@@ -237,8 +237,11 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
         }
     }
 
-    c.execute("arguments[0].scrollIntoView()", vec![value::to_value(&e)?])
-        .await?;
+    c.execute(
+        "arguments[0].scrollIntoView({ block: \"center\" })",
+        vec![value::to_value(&e)?],
+    )
+    .await?;
     e.click().await?;
 
     let e = c
