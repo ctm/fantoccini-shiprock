@@ -30,11 +30,6 @@ impl Params {
     fn new_rtfz(opt: Opt) -> AResult<Self> {
         use Race::*;
 
-        let event_id = match opt.year.0 {
-            2019 => 34346,
-            _ => bail!("We currently only scrape Run for the Zoo 2019"),
-        };
-
         let race_index = match opt.race {
             TenK => 0,
             Half => 1,
@@ -43,7 +38,7 @@ impl Params {
         };
 
         Ok(Self {
-            event_id,
+            event_id: 34346,
             race_index,
             year: opt.year,
         })
