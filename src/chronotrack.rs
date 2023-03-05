@@ -247,20 +247,22 @@ pub struct Params {
 impl Params {
     pub(crate) fn new(opt: Opt) -> AResult<Self> {
         let year = opt.year;
-        if url_for_year(&year).is_none() {
-            bail!("Year {year} is not supported");
+        if let Err(e) = url_for_year(&year) {
+            bail!("Year {year} is not supported: {e}");
         }
         let menu_item = menu_item_for(&opt.race);
         Ok(Self { year, menu_item })
     }
 }
 
-fn url_for_year(year: &Year) -> Option<&'static str> {
+fn url_for_year(year: &Year) -> Result<&'static str, &'static str> {
     match year.0 {
-        2017 => Some("24236"),
-        2018 => Some("33304"),
-        2019 => Some("40479"),
-        _ => None,
+        2017 => Ok("24236"),
+        2018 => Ok("33304"),
+        2019 => Ok("40479"),
+        2020 | 2021 => Err("That year was virtual"),
+        year if year >= 2022 => Err("Capture the mhtml and use ctm/runs)"),
+        _ => Err("Too early"),
     }
 }
 
@@ -269,12 +271,7 @@ impl Scraper for Params {
     fn url(&self) -> String {
         format!(
             "https://results.chronotrack.com/event/results/event/event-{}",
-            match &self.year.0 {
-                2017 => "24236",
-                2018 => "33304",
-                2019 => "40479",
-                year => panic!("Unexpected year: {year}"),
-            }
+            url_for_year(&self.year).unwrap()
         )
     }
 
