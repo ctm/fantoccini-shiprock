@@ -23,6 +23,7 @@ impl Params {
         match opt.event {
             Rftz => Self::new_rtfz(opt),
             Lt100 => Self::new_lt100(opt),
+            DukeCityMarathon => Self::new_dcm(opt),
             _ => bail!("{:?} is not athlinks", opt.event),
         }
     }
@@ -34,7 +35,7 @@ impl Params {
             TenK => 0,
             Half => 1,
             FiveK => 2,
-            _ => bail!("Only Half, 10kl and 5k are available"),
+            _ => bail!("Only Half, 10k and 5k are available"),
         };
 
         Ok(Self {
@@ -55,6 +56,24 @@ impl Params {
         Ok(Self {
             event_id: 33913,
             race_index: 0,
+            year: opt.year,
+        })
+    }
+
+    fn new_dcm(opt: Opt) -> AResult<Self> {
+        use Race::*;
+
+        let race_index = match opt.race {
+            Full => 0,
+            Half => 3,
+            FiveK => 4,
+            TenK => 7,
+            _ => bail!("Only Full, Half, 10k and 5k are available"),
+        };
+
+        Ok(Self {
+            event_id: 35398,
+            race_index,
             year: opt.year,
         })
     }
