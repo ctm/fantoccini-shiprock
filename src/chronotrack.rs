@@ -236,6 +236,7 @@ fn menu_item_for(race: &Race) -> &'static str {
         TenK => "Shiprock 10k",
         FiveK => "Shiprock 5k",
         Handcycle => "Shiprock Marathon Handcycle",
+        TenKRuck => panic!("No 10k ruck at Shiprock"),
     }
 }
 

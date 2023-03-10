@@ -25,6 +25,7 @@ impl Params {
             Lt100 => Self::new_lt100(opt),
             DukeCityMarathon => Self::new_dcm(opt),
             CorralesDitchRun => Self::new_cdr(opt),
+            KotH => Self::new_koth(opt),
             _ => bail!("{:?} is not athlinks", opt.event),
         }
     }
@@ -96,6 +97,23 @@ impl Params {
         })
     }
 
+    fn new_koth(opt: Opt) -> AResult<Self> {
+        use Race::*;
+
+        let race_index = match opt.race {
+            FiveK => 0,
+            TenK => 1,
+            TenKRuck => 2,
+            Half => 3,
+            _ => bail!("Only 5k, 10k, 10kruck and half are available"),
+        };
+
+        Ok(Self {
+            event_id: 166931,
+            race_index,
+            year: opt.year,
+        })
+    }
 }
 
 async fn click_view_all(c: &Client, index: usize) -> AResult<()> {
