@@ -8,9 +8,10 @@ use {
         sequence::terminated,
         IResult,
     },
-    serde::{ser::Error, Serializer},
+    serde::Serializer,
     serde_json::value,
     std::{
+        borrow::Cow,
         fmt::{self, Display, Formatter},
         num::ParseIntError,
         str::FromStr,
@@ -20,6 +21,7 @@ use {
 
 mod athlinks;
 mod chronotrack;
+mod its_your_race;
 mod ultrasignup;
 
 #[tokio::main]
@@ -46,8 +48,11 @@ async fn main() -> AResult<()> {
 
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
         Shiprock => Box::new(chronotrack::Params::new(opt)?),
-        Rftz | Lt100 | DukeCityMarathon | CorralesDitchRun | KotH => Box::new(athlinks::Params::new(opt)?),
+        Rftz | Lt100 | DukeCityMarathon | CorralesDitchRun | KotH => {
+            Box::new(athlinks::Params::new(opt)?)
+        }
         Moab240 | JJ100 | DPTR | BosqueBigfoot => Box::new(ultrasignup::Params::new(opt)?),
+        BMDM => Box::new(its_your_race::Params::new(opt)?),
     };
 
     let url = scraper.url();
@@ -74,21 +79,29 @@ impl ReallyClickable for Element {
     }
 }
 
+// TODO: move this to digital-duration-nom
 fn duration_serializer<S: Serializer>(v: &Duration, s: S) -> Result<S::Ok, S::Error> {
     let duration: std::time::Duration = (*v).into();
 
-    if duration.subsec_micros() != 0 {
-        return Err(S::Error::custom("Unserializable fractional seconds"));
-    }
+    let full_nanos;
+    let fraction: Cow<str> = {
+        let nanos = duration.subsec_nanos();
+        if nanos == 0 {
+            "".into()
+        } else {
+            full_nanos = format!(".{nanos:09}");
+            full_nanos.trim_end_matches('0').into()
+        }
+    };
     let seconds = duration.as_secs();
     let minutes = seconds / 60;
     let hours = minutes / 60;
     let seconds = seconds % 60;
     let minutes = minutes % 60;
     let string = if hours > 0 {
-        format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+        format!("{hours:02}:{minutes:02}:{seconds:02}{fraction}")
     } else {
-        format!("{:02}:{:02}", minutes, seconds)
+        format!("{minutes:02}:{seconds:02}{fraction}")
     };
     s.serialize_str(&string)
 }
@@ -131,6 +144,7 @@ pub enum Race {
     FiveK,
     Handcycle,
     TenKRuck,
+    SoloMaleHeavy, // TEMPORARY HACK
 }
 
 #[derive(Debug)]
@@ -140,7 +154,7 @@ impl Display for ParseRaceError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "choose \"full\", \"half\", \"relay\", \"10k\", \"5k\" or \"handcycle\""
+            "choose \"full\", \"half\", \"relay\", \"10k\", \"5k\" or \"handcycle\" (or \"solo-male-heavy\")"
         )
     }
 }
@@ -159,6 +173,7 @@ impl FromStr for Race {
             "5k" => Ok(FiveK),
             "handcycle" => Ok(Handcycle),
             "10kruck" => Ok(TenKRuck),
+            "solo-male-heavy" => Ok(SoloMaleHeavy),
             _ => Err(ParseRaceError),
         }
     }
@@ -193,6 +208,7 @@ pub enum Event {
     DukeCityMarathon,
     CorralesDitchRun,
     KotH,
+    BMDM,
 }
 
 #[derive(Debug)]
@@ -200,7 +216,7 @@ pub struct ParseEventError;
 
 impl Display for ParseEventError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "choose \"shiprock\", \"rftz\", \"lt100\", \"moab240\", \"dptr\", \"bosque\", \"dcm\", \"ditch\", or \"koth\"")
+        write!(f, "choose \"shiprock\", \"rftz\", \"lt100\", \"moab240\", \"dptr\", \"bosque\", \"dcm\", \"ditch\", \"koth\", or \"bmdm\"")
     }
 }
 
@@ -221,6 +237,7 @@ impl FromStr for Event {
             "dcm" => Ok(DukeCityMarathon),
             "ditch" => Ok(CorralesDitchRun),
             "koth" => Ok(KotH),
+            "bmdm" => Ok(BMDM),
             _ => Err(ParseEventError),
         }
     }
