@@ -13,6 +13,7 @@ pub struct Params {
     event_id: u32,
     race_menus: &'static [&'static str],
     year: Year,
+    participant: bool,
 }
 
 static SOLO_MALE_HEAVIES: [&str; 2] = [
@@ -42,6 +43,7 @@ impl Params {
             event_id: 6574,
             race_menus,
             year: opt.year,
+            participant: opt.participant,
         })
     }
 }
@@ -59,6 +61,17 @@ async fn print_placements(c: &Client) -> AResult<()> {
     Ok(())
 }
 
+async fn print_participants(c: &Client) -> AResult<()> {
+    c.wait().for_element(Css("#ddlPage")).await?;
+    // Yes, they really reuse Tr1 in all their trs.
+    let participants = stream::iter(c.find_all(Css("tr#Tr1")).await?)
+        .filter_map(Participant::from_element)
+        .collect::<Vec<_>>()
+        .await;
+    println!("{}", serde_json::to_string(&participants).unwrap());
+    Ok(())
+}
+
 async fn next_button(c: &Client) -> AResult<Option<Element>> {
     match c.find(Css(NEXT_LINK_CSS)).await {
         Ok(element) => Ok(Some(element)),
@@ -72,6 +85,26 @@ async fn extract_placements(c: &Client) -> AResult<()> {
 
     while {
         print_placements(c).await?;
+        button = next_button(c).await?;
+        button.is_some()
+    } {
+        button.unwrap().click().await?;
+    }
+    Ok(())
+}
+
+// TODO: DRY this with extract_placements.  It's trivial to do with macros,
+//       but without being able to have an async fn passed in as a
+//       parameter, it's a bit hard without macros (although that may
+//       be due to my lack of Rust knowledge).  There's a discussion
+//       about emulating async fn pointers on Stack Overflow:
+//       https://stackoverflow.com/questions/66769143/rust-passing-async-function-pointers
+
+async fn extract_participants(c: &Client) -> AResult<()> {
+    let mut button;
+
+    while {
+        print_participants(c).await?;
         button = next_button(c).await?;
         button.is_some()
     } {
@@ -195,6 +228,12 @@ async fn select_race(c: &Client, race_menus: &[&str]) -> AResult<()> {
     pop_up_select(c, "#ddlRace", race_menus).await
 }
 
+async fn select_participant(c: &Client) -> AResult<()> {
+    let link = c.find(Css("#lnkParticipants")).await?;
+    link.click().await?;
+    Ok(())
+}
+
 #[async_trait]
 impl Scraper for Params {
     fn url(&self) -> String {
@@ -205,8 +244,68 @@ impl Scraper for Params {
     }
 
     async fn doit(&self, client: &Client) -> AResult<()> {
-        select_year(client, self.year).await?;
-        select_race(client, self.race_menus).await?;
-        extract_placements(client).await
+        if self.participant {
+            select_participant(client).await?;
+            extract_participants(client).await
+        } else {
+            select_year(client, self.year).await?;
+            select_race(client, self.race_menus).await?;
+            extract_placements(client).await
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct Participant {
+    name: String,
+    bib: String,
+    hometown: String,
+    race: String,
+    age_group: String,
+}
+
+impl Participant {
+    async fn from_element(e: Element) -> Option<Self> {
+        let mut tds = e.find_all(Css("td")).await.ok()?.into_iter();
+        let _ = tds.next()?;
+        let (name, bib, hometown) = {
+            let name_bib_hometown = tds.next()?.text().await.ok()?;
+            let pieces = name_bib_hometown.split('\n').collect::<Vec<_>>();
+            if pieces.len() != 2 {
+                eprintln!("expected one newline in {name_bib_hometown}");
+                return None;
+            }
+            let sub_pieces = pieces[0].split(" ( Bib # ").collect::<Vec<_>>();
+            match sub_pieces.len() {
+                1 => (pieces[0].to_string(), String::new(), pieces[1].to_string()),
+                2 => {
+                    let end = match sub_pieces[1].find(" )") {
+                        None => {
+                            eprintln!("Couldn't find closing paren in {name_bib_hometown}");
+                            return None;
+                        }
+                        Some(end) => end,
+                    };
+                    (
+                        sub_pieces[0].to_string(),
+                        sub_pieces[1][..end].to_string(),
+                        pieces[1].to_string(),
+                    )
+                }
+                _n => {
+                    eprintln!("found multiple bibs in {name_bib_hometown}");
+                    return None;
+                }
+            }
+        };
+        let race = tds.next()?.text().await.ok()?;
+        let age_group = tds.next()?.text().await.ok()?;
+        Some(Self {
+            name,
+            bib,
+            hometown,
+            race,
+            age_group,
+        })
     }
 }

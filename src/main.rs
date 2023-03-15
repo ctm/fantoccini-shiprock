@@ -93,16 +93,18 @@ fn take_until_and_consume<'a>(
 #[structopt()]
 pub(crate) struct Opt {
     /// shiprock, rftz, lt100 or moab240
-    #[structopt(short = "e", long = "event", default_value = "shiprock")]
+    #[structopt(short, long, default_value = "shiprock")]
     pub event: Event,
     /// full, half, relay, 10k, 5k or handcycle
-    #[structopt(short = "r", long = "race", default_value = "full")]
+    #[structopt(short, long, default_value = "full")]
     pub race: Race,
-    #[structopt(short = "y", long = "year", default_value = "2019")]
+    #[structopt(short, long, default_value = "2019")]
     pub year: Year,
     /// See the webpage as results are gathered
-    #[structopt(short = "d", long = "display")]
+    #[structopt(short, long)]
     pub display: bool,
+    #[structopt(short, long)]
+    pub participant: bool,
 }
 
 #[derive(Debug)]
