@@ -1,5 +1,5 @@
 use {
-    crate::{duration_serializer, Event, Opt, Race, Scraper, Year},
+    crate::{Event, Opt, Race, Scraper, Year},
     anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
@@ -85,9 +85,7 @@ struct Placement {
     rank: NonZeroU16,
     name: String,
     bib: String,
-    #[serde(serialize_with = "duration_serializer")]
     time: Duration,
-    #[serde(serialize_with = "duration_serializer")]
     pace: Duration,
 }
 

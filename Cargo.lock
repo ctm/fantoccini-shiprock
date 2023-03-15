@@ -138,11 +138,12 @@ dependencies = [
 
 [[package]]
 name = "digital-duration-nom"
-version = "0.4.0"
-source = "git+https://github.com/ctm/digital-duration-nom#e7f50122c7a25925b8400775d932b1ec6c087d62"
+version = "0.5.0"
+source = "git+https://github.com/ctm/digital-duration-nom#8a868fedf166a1452402b43d576c7998ca4345e5"
 dependencies = [
  "derive_more",
  "nom",
+ "serde",
 ]
 
 [[package]]

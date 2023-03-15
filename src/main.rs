@@ -1,17 +1,14 @@
 use {
     anyhow::Result as AResult,
     async_trait::async_trait,
-    digital_duration_nom::duration::Duration,
     fantoccini::{elements::Element, Client, ClientBuilder},
     nom::{
         bytes::complete::{take, take_until},
         sequence::terminated,
         IResult,
     },
-    serde::Serializer,
     serde_json::value,
     std::{
-        borrow::Cow,
         fmt::{self, Display, Formatter},
         num::ParseIntError,
         str::FromStr,
@@ -77,33 +74,6 @@ impl ReallyClickable for Element {
             .await?;
         Ok(())
     }
-}
-
-// TODO: move this to digital-duration-nom
-fn duration_serializer<S: Serializer>(v: &Duration, s: S) -> Result<S::Ok, S::Error> {
-    let duration: std::time::Duration = (*v).into();
-
-    let full_nanos;
-    let fraction: Cow<str> = {
-        let nanos = duration.subsec_nanos();
-        if nanos == 0 {
-            "".into()
-        } else {
-            full_nanos = format!(".{nanos:09}");
-            full_nanos.trim_end_matches('0').into()
-        }
-    };
-    let seconds = duration.as_secs();
-    let minutes = seconds / 60;
-    let hours = minutes / 60;
-    let seconds = seconds % 60;
-    let minutes = minutes % 60;
-    let string = if hours > 0 {
-        format!("{hours:02}:{minutes:02}:{seconds:02}{fraction}")
-    } else {
-        format!("{minutes:02}:{seconds:02}{fraction}")
-    };
-    s.serialize_str(&string)
 }
 
 // Nom helper
