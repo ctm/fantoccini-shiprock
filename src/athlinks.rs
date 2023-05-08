@@ -33,9 +33,22 @@ impl Params {
     fn new_rtfz(opt: Opt) -> AResult<Self> {
         use Race::*;
 
+        // UGH! See issue #8
         let race_index = match opt.race {
-            TenK => 0,
-            Half => 1,
+            TenK => {
+                if opt.year.0 == 2022 {
+                    0
+                } else {
+                    1
+                }
+            }
+            Half => {
+                if opt.year.0 == 2022 {
+                    1
+                } else {
+                    0
+                }
+            }
             FiveK => 2,
             _ => bail!("Only Half, 10k and 5k are available"),
         };
