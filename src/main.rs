@@ -151,7 +151,7 @@ impl FromStr for Race {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Year(u16);
 
 impl Display for Year {

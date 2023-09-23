@@ -96,9 +96,27 @@ impl Params {
     fn new_cdr(opt: Opt) -> AResult<Self> {
         use Race::*;
 
+
+        /*
+        2008 All, 10k, 5k
+        2011 All, 5k, 10k
+        2012 All, 10k
+        2015 All, 10k, 5k
+        2017 All, Half, 10k, 5k
+        2018 All, Half, 10k, 5k, Half-3-person-relay
+        2019 All, Half, 10k, 5k, Half-3-person-relay
+        2021 All, Half, Kids, Virtual-Half, Virtual 10k, Virtual 5k, 5k, 10k
+        2022 All, Kids, 10k, Half, 5k
+        2023 All, Half, 10k, 5k, SAR-Technical-Team, Kids
+         */
+
+        if opt.year != "2023".parse().unwrap() {
+            bail!("Only 2023 (for now?)");
+        }
+        
         let race_index = match opt.race {
-            TenK => 0,
-            Half => 1,
+            TenK => 1,
+            Half => 0,
             FiveK => 2,
             _ => bail!("Only Half, 10k and 5k are available"),
         };
