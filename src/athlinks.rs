@@ -78,12 +78,24 @@ impl Params {
     fn new_dcm(opt: Opt) -> AResult<Self> {
         use Race::*;
 
-        let race_index = match opt.race {
-            Full => 0,
-            Half => 3,
-            FiveK => 4,
-            TenK => 7,
-            _ => bail!("Only Full, Half, 10k and 5k are available"),
+        let race_index = if opt.year == "2022".parse().unwrap() {
+            match opt.race {
+                Full => 0,
+                Half => 3,
+                FiveK => 4,
+                TenK => 7,
+                _ => bail!("Only Full, Half, 10k and 5k are available"),
+            }
+        } else if opt.year == "2023".parse().unwrap() {
+            match opt.race {
+                Full => 0,
+                Half => 4,
+                FiveK => 5,
+                TenK => 8,
+                _ => bail!("Only Full, Half, 10k and 5k are available"),
+            }
+        } else {
+            panic!("Only 2022 or 2023 (for now)");
         };
 
         Ok(Self {
@@ -95,7 +107,6 @@ impl Params {
 
     fn new_cdr(opt: Opt) -> AResult<Self> {
         use Race::*;
-
 
         /*
         2008 All, 10k, 5k
@@ -113,7 +124,7 @@ impl Params {
         if opt.year != "2023".parse().unwrap() {
             bail!("Only 2023 (for now?)");
         }
-        
+
         let race_index = match opt.race {
             TenK => 1,
             Half => 0,
