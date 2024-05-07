@@ -222,23 +222,26 @@ struct Placement {
 
 macro_rules! element_text {
     ($e:ident, $s:literal) => {
-        $e.find(Css($s)).await.ok()?.text().await.ok()
+        $e.find(Css($s)).await?.text().await
     };
 }
 
 macro_rules! elements_text {
     ($e:ident) => {
-        $e.next()?.text().await.ok()
+        $e.next()
+            .ok_or_else(|| anyhow!("no element for text"))?
+            .text()
+            .await
     };
 }
 
 macro_rules! parsed_elements_text {
     ($e:ident) => {
-        elements_text!($e)?.parse().ok()
+        elements_text!($e)?.parse()
     };
 }
 
-fn extract_sex_et_al(pieces: &[&str]) -> Option<(String, Option<NonZeroU8>, String, String)> {
+fn extract_sex_et_al(pieces: &[&str]) -> AResult<(String, Option<NonZeroU8>, String, String)> {
     let new_pieces;
     let pieces = if pieces.len() == 2 {
         new_pieces = [pieces[0], "", pieces[1]];
@@ -247,8 +250,7 @@ fn extract_sex_et_al(pieces: &[&str]) -> Option<(String, Option<NonZeroU8>, Stri
         pieces
     };
     if pieces.len() != 3 {
-        eprintln!("expected three pieces in {pieces:?}");
-        return None;
+        bail!("expected three pieces in {pieces:?}")
     }
     let sub_pieces = pieces[0].split(' ').collect::<Vec<_>>();
     let sub_pieces = match sub_pieces.len() {
@@ -256,20 +258,19 @@ fn extract_sex_et_al(pieces: &[&str]) -> Option<(String, Option<NonZeroU8>, Stri
         1 => [sub_pieces[0], ""],
         2 => [sub_pieces[0], sub_pieces[1]],
         _ => {
-            eprintln!("don't know what to do with sub_pieces: {sub_pieces:?}");
-            return None;
+            bail!("don't know what to do with sub_pieces: {sub_pieces:?}");
         }
     };
     let sex = sub_pieces[0].to_string();
-    let age = sub_pieces.get(1).and_then(|age| age.parse().ok());
+    let age = sub_pieces[1].parse().ok();
     let bib = pieces[1].strip_prefix("Bib ").unwrap_or("").to_string();
     let hometown = pieces[2].to_string();
-    Some((sex, age, bib, hometown))
+    Ok((sex, age, bib, hometown))
 }
 
 impl Placement {
     async fn from_element(e: Element) -> Option<Self> {
-        async fn from_element(e: &Element) -> Option<Placement> {
+        async fn from_element(e: &Element) -> AResult<Placement> {
             let name = element_text!(e, ".athName")?;
 
             let (sex, age, bib, hometown) = {
@@ -277,13 +278,13 @@ impl Placement {
                 let pieces = text.split('\n').collect::<Vec<_>>();
                 extract_sex_et_al(&pieces)?
             };
-            let mut es = e.find_all(Css(".px-0")).await.ok()?.into_iter();
+            let mut es = e.find_all(Css(".px-0")).await?.into_iter();
             let rank = parsed_elements_text!(es)?;
-            let gender_rank = parsed_elements_text!(es);
+            let gender_rank = parsed_elements_text!(es).ok();
             let division_rank = parsed_elements_text!(es)?;
-            let pace = elements_text!(es)?.split('\n').next()?.parse().ok()?;
+            let pace = elements_text!(es)?.split('\n').next().unwrap().parse()?;
             let time = parsed_elements_text!(es)?;
-            Some(Placement {
+            Ok(Placement {
                 name,
                 sex,
                 age,
@@ -297,7 +298,7 @@ impl Placement {
             })
         }
         let result = from_element(&e).await;
-        if result.is_none() {
+        if let Err(err) = &result {
             // If this line is being discarded, we want to dump enough
             // info to figure out why.  We know we're going to ignore
             // column headings and DNFs.
@@ -309,9 +310,9 @@ impl Placement {
                     }
                 }
             }
-            eprintln!("discarding {text:?}");
+            eprintln!("discarding {text:?}, {err:?}");
         }
-        result
+        result.ok()
     }
 }
 
