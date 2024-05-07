@@ -202,6 +202,7 @@ async fn extract_placements(c: &Client) -> AResult<()> {
         button.is_some()
     } {
         button.unwrap().click().await?;
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     }
     Ok(())
 }
