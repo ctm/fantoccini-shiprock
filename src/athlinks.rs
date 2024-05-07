@@ -178,7 +178,7 @@ const BUTTON_CSS: &str = "#pager>div>div>button";
 
 async fn print_placements(c: &Client) -> AResult<()> {
     c.wait().for_element(Css(BUTTON_CSS)).await?;
-    let placements = stream::iter(c.find_all(Css(".row.mx-0")).await?)
+    let placements = stream::iter(c.find_all(Css(".row.mx-0.link-to-irp")).await?.into_iter().take(50))
         .filter_map(Placement::from_element)
         .collect::<Vec<_>>()
         .await;
