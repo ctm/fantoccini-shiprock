@@ -26,6 +26,7 @@ impl Params {
             DukeCityMarathon => Self::new_dcm(opt),
             CorralesDitchRun => Self::new_cdr(opt),
             KotH => Self::new_koth(opt),
+            RioGrande => Self::new_rio_grande(opt),
             _ => bail!("{:?} is not athlinks", opt.event),
         }
     }
@@ -156,6 +157,22 @@ impl Params {
             year: opt.year,
         })
     }
+
+    fn new_rio_grande(opt: Opt) -> AResult<Self> {
+        use Race::*;
+
+        let race_index = match opt.race {
+            FiveK => 1,
+            Half => 0,
+            _ => bail!("Only 5k and half are available"),
+        };
+
+        Ok(Self {
+            event_id: 11260,
+            race_index,
+            year: opt.year,
+        })
+    }
 }
 
 async fn click_view_all(c: &Client, index: usize) -> AResult<()> {
@@ -178,10 +195,15 @@ const BUTTON_CSS: &str = "#pager>div>div>button";
 
 async fn print_placements(c: &Client) -> AResult<()> {
     c.wait().for_element(Css(BUTTON_CSS)).await?;
-    let placements = stream::iter(c.find_all(Css(".row.mx-0.link-to-irp")).await?.into_iter().take(50))
-        .filter_map(Placement::from_element)
-        .collect::<Vec<_>>()
-        .await;
+    let placements = stream::iter(
+        c.find_all(Css(".row.mx-0.link-to-irp"))
+            .await?
+            .into_iter()
+            .take(50),
+    )
+    .filter_map(Placement::from_element)
+    .collect::<Vec<_>>()
+    .await;
     println!("{}", serde_json::to_string(&placements).unwrap());
     Ok(())
 }
@@ -201,6 +223,7 @@ async fn extract_placements(c: &Client) -> AResult<()> {
         button = next_button(c).await?;
         button.is_some()
     } {
+        eprintln!("about to click from extract_placements");
         button.unwrap().click().await?;
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     }
@@ -335,6 +358,7 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
         vec![value::to_value(&e)?],
     )
     .await?;
+    eprintln!("about to click from pop_up_select-1(...{selector}...)");
     e.click().await?;
 
     let e = c
@@ -372,7 +396,11 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
     } {}
     match found {
         None => bail!("Could not find {selector} {:?}", containing),
-        Some(e) => e.click().await?,
+        // Some(e) => e.click().await?,
+        Some(e) => {
+            eprintln!("about to click from pop_up_select-2(...{selector}...)");
+            e.click().await?
+        }
     }
     Ok(())
 }

@@ -180,6 +180,7 @@ struct StatusWithCount {
 enum ParseStatusWithCountError {
     WrongNumberOfPieces,
     NotStatus(UnknownStatus),
+    #[allow(dead_code)]
     BadCount(ParseIntError),
 }
 

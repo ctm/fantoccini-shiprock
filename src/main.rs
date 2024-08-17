@@ -45,7 +45,7 @@ async fn main() -> AResult<()> {
 
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
         Shiprock => Box::new(chronotrack::Params::new(opt)?),
-        Rftz | Lt100 | DukeCityMarathon | CorralesDitchRun | KotH => {
+        Rftz | Lt100 | DukeCityMarathon | CorralesDitchRun | KotH | RioGrande => {
             Box::new(athlinks::Params::new(opt)?)
         }
         Moab240 | JJ100 | DPTR | BosqueBigfoot => Box::new(ultrasignup::Params::new(opt)?),
@@ -181,6 +181,7 @@ pub enum Event {
     CorralesDitchRun,
     KotH,
     BMDM,
+    RioGrande,
 }
 
 #[derive(Debug)]
@@ -188,7 +189,7 @@ pub struct ParseEventError;
 
 impl Display for ParseEventError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "choose \"shiprock\", \"rftz\", \"lt100\", \"moab240\", \"dptr\", \"bosque\", \"dcm\", \"ditch\", \"koth\", or \"bmdm\"")
+        write!(f, "choose \"shiprock\", \"rftz\", \"lt100\", \"moab240\", \"dptr\", \"bosque\", \"dcm\", \"ditch\", \"koth\", \"bmdm\" or \"riogrande\"")
     }
 }
 
@@ -210,6 +211,7 @@ impl FromStr for Event {
             "ditch" => Ok(CorralesDitchRun),
             "koth" => Ok(KotH),
             "bmdm" => Ok(BMDM),
+            "riogrande" => Ok(RioGrande),
             _ => Err(ParseEventError),
         }
     }

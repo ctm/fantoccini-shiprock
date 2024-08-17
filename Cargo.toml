@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-fantoccini = "0.19.3"
+fantoccini = "0.21.1"
 serde_json = "1.0.96"
 nom = "7.1.3"
 digital-duration-nom = { version = "0.5.0", git = "https://github.com/ctm/digital-duration-nom", features = ["serde"] }

@@ -3,7 +3,12 @@ use {
     anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{elements::Element, error::CmdError::NoSuchElement, Client, Locator::Css},
+    fantoccini::{
+        elements::Element,
+        error::{CmdError, ErrorStatus::NoSuchElement, WebDriver},
+        Client,
+        Locator::Css,
+    },
     futures::stream::{self, StreamExt},
     serde::Serialize,
     std::num::NonZeroU16,
@@ -75,7 +80,10 @@ async fn print_participants(c: &Client) -> AResult<()> {
 async fn next_button(c: &Client) -> AResult<Option<Element>> {
     match c.find(Css(NEXT_LINK_CSS)).await {
         Ok(element) => Ok(Some(element)),
-        Err(NoSuchElement(_)) => Ok(None),
+        Err(CmdError::Standard(WebDriver {
+            error: NoSuchElement,
+            ..
+        })) => Ok(None),
         Err(err) => bail!(err),
     }
 }
@@ -206,7 +214,10 @@ async fn pop_up_select(c: &Client, selector: &str, matches: &[&str]) -> AResult<
                 found = true;
                 break;
             }
-            Err(NoSuchElement(_)) => {} // ignore
+            Err(CmdError::Standard(WebDriver {
+                error: NoSuchElement,
+                ..
+            })) => {} // ignore
             Err(e) => {
                 dbg!(e);
             } // this is a surprise
