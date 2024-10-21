@@ -403,9 +403,7 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
     match found {
         None => bail!("Could not find {selector} {:?}", containing),
         // Some(e) => e.click().await?,
-        Some(e) => {
-            e.click().await?
-        }
+        Some(e) => e.click().await?,
     }
     Ok(())
 }

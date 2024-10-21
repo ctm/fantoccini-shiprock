@@ -1,6 +1,7 @@
 use {
     anyhow::Result as AResult,
     async_trait::async_trait,
+    clap::{Parser, ValueEnum},
     fantoccini::{elements::Element, Client, ClientBuilder},
     nom::{
         bytes::complete::{take, take_until},
@@ -13,7 +14,6 @@ use {
         num::ParseIntError,
         str::FromStr,
     },
-    structopt::StructOpt,
 };
 
 mod athlinks;
@@ -25,7 +25,7 @@ mod ultrasignup;
 async fn main() -> AResult<()> {
     use Event::*;
 
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
 
     let mut caps = serde_json::map::Map::new();
 
@@ -89,25 +89,24 @@ fn take_until_and_consume<'a>(
 
 // Command line argument processing
 
-#[derive(StructOpt, Debug)]
-#[structopt()]
+#[derive(Parser, Debug)]
 pub(crate) struct Opt {
     /// shiprock, rftz, lt100 or moab240
-    #[structopt(short, long, default_value = "shiprock")]
+    #[arg(short, long, default_value = "shiprock", value_enum)]
     pub event: Event,
     /// full, half, relay, 10k, 5k or handcycle
-    #[structopt(short, long, default_value = "full")]
+    #[arg(short, long, default_value = "full", value_enum)]
     pub race: Race,
-    #[structopt(short, long, default_value = "2019")]
+    #[arg(short, long, default_value = "2019")]
     pub year: Year,
     /// See the webpage as results are gathered
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub display: bool,
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub participant: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum Race {
     Full,
     Half,
@@ -168,7 +167,7 @@ impl FromStr for Year {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum Event {
     Shiprock,
     Rftz,
