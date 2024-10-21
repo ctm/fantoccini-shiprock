@@ -95,8 +95,16 @@ impl Params {
                 TenK => 8,
                 _ => bail!("Only Full, Half, 10k and 5k are available"),
             }
+        } else if opt.year == "2024".parse().unwrap() {
+            match opt.race {
+                Full => 0,
+                Half => 5,
+                FiveK => 6,
+                TenK => 9,
+                _ => bail!("Only Full, Half, 10k and 5k are available"),
+            }
         } else {
-            panic!("Only 2022 or 2023 (for now)");
+            panic!("Only 2022, 2023 or 2024 (for now)");
         };
 
         Ok(Self {
@@ -223,7 +231,6 @@ async fn extract_placements(c: &Client) -> AResult<()> {
         button = next_button(c).await?;
         button.is_some()
     } {
-        eprintln!("about to click from extract_placements");
         button.unwrap().click().await?;
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     }
@@ -358,7 +365,6 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
         vec![value::to_value(&e)?],
     )
     .await?;
-    eprintln!("about to click from pop_up_select-1(...{selector}...)");
     e.click().await?;
 
     let e = c
@@ -398,7 +404,6 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
         None => bail!("Could not find {selector} {:?}", containing),
         // Some(e) => e.click().await?,
         Some(e) => {
-            eprintln!("about to click from pop_up_select-2(...{selector}...)");
             e.click().await?
         }
     }
