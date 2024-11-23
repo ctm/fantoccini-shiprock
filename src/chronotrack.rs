@@ -1,5 +1,5 @@
 use {
-    crate::{take_until_and_consume, Opt, Race, ReallyClickable, Scraper, Year},
+    crate::{take_until_and_consume, ElementExt, Opt, Race, Scraper, Year},
     anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,

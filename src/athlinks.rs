@@ -1,19 +1,33 @@
 use {
-    crate::{Event, Opt, Race, ReallyClickable, Scraper, Year},
+    crate::{ElementExt, Event, Opt, Race, Scraper, Year},
     anyhow::{anyhow, bail, Result as AResult},
     async_trait::async_trait,
     digital_duration_nom::duration::Duration,
-    fantoccini::{elements::Element, Client, Locator::Css},
+    fantoccini::{
+        elements::Element,
+        Client,
+        Locator::{Css, XPath},
+    },
     futures::stream::{self, StreamExt},
     serde::Serialize,
     serde_json::value,
     std::num::{NonZeroU16, NonZeroU8},
 };
 
+const DATE_DIV: &str = "#eventDate";
+const RACE_DIV: &str = "#race";
+
 pub struct Params {
     event_id: u32,
-    race_index: usize,
+    second_id: u32,
+    race: Race,
     year: Year,
+}
+
+#[derive(Copy, Clone)]
+enum Match {
+    Contains,
+    Exact,
 }
 
 impl Params {
@@ -27,6 +41,7 @@ impl Params {
             CorralesDitchRun => Self::new_cdr(opt),
             KotH => Self::new_koth(opt),
             RioGrande => Self::new_rio_grande(opt),
+            DoggieDash => Self::new_doggie_dash(opt),
             _ => bail!("{:?} is not athlinks", opt.event),
         }
     }
@@ -34,29 +49,15 @@ impl Params {
     fn new_rtfz(opt: Opt) -> AResult<Self> {
         use Race::*;
 
-        // UGH! See issue #8
-        let race_index = match opt.race {
-            TenK => {
-                if opt.year.0 == 2022 {
-                    0
-                } else {
-                    1
-                }
-            }
-            Half => {
-                if opt.year.0 == 2022 {
-                    1
-                } else {
-                    0
-                }
-            }
-            FiveK => 2,
+        match opt.race {
+            TenK | Half | FiveK => {}
             _ => bail!("Only Half, 10k and 5k are available"),
         };
 
         Ok(Self {
             event_id: 34346,
-            race_index,
+            second_id: 729962,
+            race: opt.race,
             year: opt.year,
         })
     }
@@ -71,7 +72,8 @@ impl Params {
 
         Ok(Self {
             event_id: 33913,
-            race_index: 0,
+            second_id: 1064640,
+            race: opt.race,
             year: opt.year,
         })
     }
@@ -79,37 +81,29 @@ impl Params {
     fn new_dcm(opt: Opt) -> AResult<Self> {
         use Race::*;
 
-        let race_index = if opt.year == "2022".parse().unwrap() {
+        if opt.year == "2022".parse().unwrap() {
             match opt.race {
-                Full => 0,
-                Half => 3,
-                FiveK => 4,
-                TenK => 7,
+                Full | Half | FiveK | TenK => {}
                 _ => bail!("Only Full, Half, 10k and 5k are available"),
             }
         } else if opt.year == "2023".parse().unwrap() {
             match opt.race {
-                Full => 0,
-                Half => 4,
-                FiveK => 5,
-                TenK => 8,
+                Full | Half | FiveK | TenK => {}
                 _ => bail!("Only Full, Half, 10k and 5k are available"),
             }
         } else if opt.year == "2024".parse().unwrap() {
             match opt.race {
-                Full => 0,
-                Half => 5,
-                FiveK => 6,
-                TenK => 9,
+                Full | Half | FiveK | TenK => {}
                 _ => bail!("Only Full, Half, 10k and 5k are available"),
             }
         } else {
-            panic!("Only 2022, 2023 or 2024 (for now)");
+            bail!("Only 2022, 2023 or 2024 (for now)");
         };
 
         Ok(Self {
             event_id: 35398,
-            race_index,
+            second_id: 1032202,
+            race: opt.race,
             year: opt.year,
         })
     }
@@ -134,16 +128,15 @@ impl Params {
             bail!("Only 2023 (for now?)");
         }
 
-        let race_index = match opt.race {
-            TenK => 1,
-            Half => 0,
-            FiveK => 2,
+        match opt.race {
+            TenK | Half | FiveK => {}
             _ => bail!("Only Half, 10k and 5k are available"),
         };
 
         Ok(Self {
             event_id: 6398,
-            race_index,
+            second_id: 1079194,
+            race: opt.race,
             year: opt.year,
         })
     }
@@ -151,17 +144,15 @@ impl Params {
     fn new_koth(opt: Opt) -> AResult<Self> {
         use Race::*;
 
-        let race_index = match opt.race {
-            FiveK => 0,
-            TenK => 1,
-            TenKRuck => 2,
-            Half => 3,
+        match opt.race {
+            FiveK | TenK | TenKRuck | Half => {}
             _ => bail!("Only 5k, 10k, 10kruck and half are available"),
         };
 
         Ok(Self {
             event_id: 166931,
-            race_index,
+            second_id: 1064112,
+            race: opt.race,
             year: opt.year,
         })
     }
@@ -169,32 +160,74 @@ impl Params {
     fn new_rio_grande(opt: Opt) -> AResult<Self> {
         use Race::*;
 
-        let race_index = match opt.race {
-            FiveK => 1,
-            Half => 0,
+        match opt.race {
+            FiveK | Half => {}
             _ => bail!("Only 5k and half are available"),
         };
 
         Ok(Self {
             event_id: 11260,
-            race_index,
+            second_id: 1040305,
+            race: opt.race,
             year: opt.year,
         })
     }
+
+    fn new_doggie_dash(opt: Opt) -> AResult<Self> {
+        use Race::*;
+
+        match opt.race {
+            FiveK => {}
+            _ => bail!("Only 5k and half are available"),
+        };
+        Ok(Self {
+            event_id: 68104,
+            second_id: 1094706,
+            race: opt.race,
+            year: opt.year,
+        })
+    }
+
+    async fn accept_cookies(&self, c: &Client) -> AResult<()> {
+        c.wait()
+            .for_element(XPath("//button[text()='okay, got it']"))
+            .await?
+            .click()
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn click_date_to_bring_up_event_filter(&self, c: &Client) -> AResult<()> {
+        const DATE_BUTTON: &str = "div.MuiChip-clickable";
+
+        let e = c.wait().for_element(Css(DATE_BUTTON)).await.map_err(|e| {
+            let message = format!("Couldn't find {}: {e:?}", DATE_BUTTON);
+            eprintln!("{}", message);
+            anyhow!(message)
+        })?;
+        e.click().await?;
+        c.wait().for_element(Css(DATE_DIV)).await.map_err(|e| {
+            let message = format!("Couldn't find {}: {e:?}", DATE_DIV);
+            eprintln!("{}", message);
+            anyhow!(message)
+        })?;
+        Ok(())
+    }
+
+    async fn select_year(&self, c: &Client) -> AResult<()> {
+        let year = self.year.to_string();
+        pop_up_select(c, DATE_DIV, &[&year[..]], Match::Contains).await
+    }
+
+    async fn select_race(&self, c: &Client) -> AResult<()> {
+        pop_up_select(c, RACE_DIV, self.race.li_text(), Match::Exact).await
+    }
 }
 
-async fn click_view_all(c: &Client, index: usize) -> AResult<()> {
+async fn click_apply_filter(c: &Client) -> AResult<()> {
     c.wait()
-        .for_element(Css("div.col-md-3.col-12>button"))
+        .for_element(XPath("//span[text()='Apply Filter']"))
         .await?
-        .really_click(c)
-        .await?;
-
-    c.wait().for_element(Css(".view-all-results")).await?;
-
-    c.find_all(Css(".view-all-results"))
-        .await?
-        .remove(index)
         .really_click(c)
         .await
 }
@@ -347,7 +380,12 @@ impl Placement {
     }
 }
 
-async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResult<()> {
+// This should choose Event Date and Race. Division and Split will default
+// to the values we need ("Overall" and "All Splits").
+// I've verified this with each of the Athlinks events we currently scrape.
+// filter options.
+
+async fn pop_up_select(c: &Client, selector: &str, containing: &[&str], m: Match) -> AResult<()> {
     let e = c.wait().for_element(Css(selector)).await.map_err(|e| {
         let message = format!("Couldn't find {selector}: {e:?}");
         eprintln!("{}", message);
@@ -365,7 +403,7 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
         vec![value::to_value(&e)?],
     )
     .await?;
-    e.click().await?;
+    e.obscured_click(c).await?;
 
     let e = c
         .wait()
@@ -390,7 +428,12 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
                     false
                 }
                 Ok(t) => {
-                    if containing.iter().any(|c| t.contains(c)) {
+                    // NOTE: contains won't work for race.  It's fine for year,
+                    // but "Half Marathon" contains "Marathon"
+                    if containing.iter().any(|c| match m {
+                        Match::Contains => t.contains(c),
+                        Match::Exact => t == *c,
+                    }) {
                         found = Some(e);
                         false
                     } else {
@@ -402,31 +445,54 @@ async fn pop_up_select(c: &Client, selector: &str, containing: &[&str]) -> AResu
     } {}
     match found {
         None => bail!("Could not find {selector} {:?}", containing),
-        // Some(e) => e.click().await?,
         Some(e) => e.click().await?,
     }
     Ok(())
 }
 
-async fn select_year(c: &Client, year: Year) -> AResult<()> {
-    let year = year.to_string();
-    pop_up_select(c, "#eventDate", &[&year[..]]).await
-}
-
-async fn select_full_course(c: &Client) -> AResult<()> {
-    pop_up_select(c, "#split", &["Full Course", "Finish"]).await
-}
-
 #[async_trait]
 impl Scraper for Params {
     fn url(&self) -> String {
-        format!("https://www.athlinks.com/event/{}/results", self.event_id)
+        format!(
+            "https://www.athlinks.com/event/{}/results/Event/{}/Results",
+            self.event_id, self.second_id
+        )
     }
 
     async fn doit(&self, client: &Client) -> AResult<()> {
-        select_year(client, self.year).await?;
-        click_view_all(client, self.race_index).await?;
-        select_full_course(client).await?;
+        self.accept_cookies(client).await?;
+        self.click_date_to_bring_up_event_filter(client).await?;
+        self.select_year(client).await?;
+        self.select_race(client).await?;
+        click_apply_filter(client).await?;
         extract_placements(client).await
+    }
+}
+
+trait RaceExt {
+    fn li_text(&self) -> &'static [&'static str];
+}
+
+impl RaceExt for Race {
+    fn li_text(&self) -> &'static [&'static str] {
+        use Race::*;
+        match self {
+            Full => &["Marathon"],
+            Half => &["Half Marathon", "Lovelace Rio Grande Half Marathon"],
+            Relay => unreachable!(),
+            TenK => &["10K Timed", "10K Run", "10k"],
+            FiveK => &[
+                "5K Timed",
+                "5K Run",
+                "5K Run/Walk",
+                "5k",
+                "Garrity Group 5k Run/Walk",
+                "One Medal 5k Run/Walk",
+                "Doggie Dash",
+            ],
+            Handcycle => unreachable!(),
+            TenKRuck => &["10k Rucksack"],
+            SoloMaleHeavy => unreachable!(),
+        }
     }
 }

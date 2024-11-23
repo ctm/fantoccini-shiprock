@@ -2,7 +2,11 @@ use {
     anyhow::Result as AResult,
     async_trait::async_trait,
     clap::{Parser, ValueEnum},
-    fantoccini::{elements::Element, Client, ClientBuilder},
+    fantoccini::{
+        actions::{InputSource, NullAction, NullActions},
+        elements::Element,
+        Client, ClientBuilder,
+    },
     nom::{
         bytes::complete::{take, take_until},
         sequence::terminated,
@@ -45,7 +49,7 @@ async fn main() -> AResult<()> {
 
     let scraper: Box<dyn Scraper + Sync> = match opt.event {
         Shiprock => Box::new(chronotrack::Params::new(opt)?),
-        Rftz | Lt100 | DukeCityMarathon | CorralesDitchRun | KotH | RioGrande => {
+        Rftz | Lt100 | DukeCityMarathon | CorralesDitchRun | KotH | RioGrande | DoggieDash => {
             Box::new(athlinks::Params::new(opt)?)
         }
         Moab240 | JJ100 | DPTR | BosqueBigfoot => Box::new(ultrasignup::Params::new(opt)?),
@@ -62,16 +66,31 @@ async fn main() -> AResult<()> {
 }
 
 #[async_trait]
-trait ReallyClickable {
+trait ElementExt {
     async fn really_click(&self, client: &Client) -> AResult<()>;
+    async fn obscured_click(&self, client: &Client) -> AResult<()>;
 }
 
 #[async_trait]
-impl ReallyClickable for Element {
+impl ElementExt for Element {
     async fn really_click(&self, client: &Client) -> AResult<()> {
         client
             .execute("arguments[0].click()", vec![value::to_value(self)?])
             .await?;
+        Ok(())
+    }
+
+    async fn obscured_click(&self, c: &Client) -> AResult<()> {
+        while self
+            .click()
+            .await
+            .inspect_err(|_e| {
+                // dbg!(e);
+            })
+            .is_err()
+        {
+            c.pause(std::time::Duration::from_millis(250)).await?;
+        }
         Ok(())
     }
 }
@@ -181,6 +200,7 @@ pub enum Event {
     KotH,
     BMDM,
     RioGrande,
+    DoggieDash,
 }
 
 #[derive(Debug)]
@@ -188,7 +208,7 @@ pub struct ParseEventError;
 
 impl Display for ParseEventError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "choose \"shiprock\", \"rftz\", \"lt100\", \"moab240\", \"dptr\", \"bosque\", \"dcm\", \"ditch\", \"koth\", \"bmdm\" or \"riogrande\"")
+        write!(f, "choose \"shiprock\", \"rftz\", \"lt100\", \"moab240\", \"dptr\", \"bosque\", \"dcm\", \"ditch\", \"koth\", \"bmdm\", \"riogrande\" or \"doggie-dash\"")
     }
 }
 
@@ -211,6 +231,7 @@ impl FromStr for Event {
             "koth" => Ok(KotH),
             "bmdm" => Ok(BMDM),
             "riogrande" => Ok(RioGrande),
+            "doggie" => Ok(DoggieDash),
             _ => Err(ParseEventError),
         }
     }
@@ -220,4 +241,18 @@ impl FromStr for Event {
 trait Scraper {
     fn url(&self) -> String;
     async fn doit(&self, client: &Client) -> AResult<()>;
+}
+
+pub(crate) trait ClientExt {
+    async fn pause(&self, duration: std::time::Duration) -> AResult<()>;
+}
+
+impl ClientExt for Client {
+    async fn pause(&self, duration: std::time::Duration) -> AResult<()> {
+        self.perform_actions(
+            NullActions::new("pause".to_string()).then(NullAction::Pause { duration }),
+        )
+        .await
+        .map_err(Into::into)
+    }
 }
