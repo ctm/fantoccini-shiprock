@@ -174,7 +174,7 @@ fn parsed_td<'a, O: FromStr>(to_match: &'a str) -> impl FnMut(&'a str) -> IResul
 }
 
 #[allow(clippy::needless_lifetimes)]
-fn td<'a>(to_match: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> + '_ {
+fn td<'a>(to_match: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     preceded(
         tuple((
             multispace0,

@@ -188,7 +188,7 @@ impl Placement {
             // column headings and DNFs.
             let text = e.text().await;
             if let Ok(text) = text.as_ref() {
-                if let Some(last) = text.split('\n').last() {
+                if let Some(last) = text.split('\n').next_back() {
                     if last == "DNF" || last == "TIME" {
                         return None;
                     }
