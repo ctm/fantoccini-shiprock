@@ -8,9 +8,10 @@ use {
         bytes::complete::{tag, take_until},
         character::complete::{multispace0, multispace1},
         combinator::{all_consuming, map, map_res, opt, value},
+        error::Error,
         multi::many1,
-        sequence::{preceded, terminated, tuple},
-        IResult,
+        sequence::{preceded, terminated},
+        IResult, Parser,
     },
     serde::Serialize,
     std::{collections::HashMap, num::NonZeroU16, str::FromStr},
@@ -135,17 +136,18 @@ impl Placement {
 
 fn placements(input: &str) -> IResult<&str, Vec<Placement>> {
     preceded(
-        tuple((
+        (
             take_until("<tbody class=\"ui-widget-content\" role=\"alert\""),
             take_until_and_consume(">"),
-        )),
+        ),
         many1(placement),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn placement(input: &str) -> IResult<&str, Placement> {
     map(
-        tuple((
+        (
             preceded(tr, map_res(td("rank"), |rank| rank.parse())),
             td("name"),
             td("bib"),
@@ -156,42 +158,42 @@ fn placement(input: &str) -> IResult<&str, Placement> {
             opt(td("sex")),
             td("agroup"),
             terminated(parsed_td("agrank"), close_tr),
-        )),
+        ),
         Placement::new,
-    )(input)
+    )
+    .parse(input)
 }
 
 fn tr(input: &str) -> IResult<&str, ()> {
-    value(
-        (),
-        tuple((multispace0, tag("<tr "), take_until_and_consume(">"))),
-    )(input)
+    value((), (multispace0, tag("<tr "), take_until_and_consume(">"))).parse(input)
 }
 
 #[allow(clippy::needless_lifetimes)]
-fn parsed_td<'a, O: FromStr>(to_match: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, O> {
+fn parsed_td<'a, O: FromStr>(
+    to_match: &'a str,
+) -> impl Parser<&'a str, Error = Error<&'a str>, Output = O> {
     map_res(td(to_match), |string| string.parse())
 }
 
 #[allow(clippy::needless_lifetimes)]
-fn td<'a>(to_match: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+fn td<'a>(to_match: &'a str) -> impl Parser<&'a str, Error = Error<&'a str>, Output = &'a str> {
     preceded(
-        tuple((
+        (
             multispace0,
             tag("<td class=\"ui-widget-content bazu-"),
             tag(to_match),
             tag("\">"),
             take_until_and_consume(">"),
-        )),
+        ),
         terminated(
             take_until_and_consume("<"),
-            tuple((take_until("</td>"), tag("</td>"))),
+            (take_until("</td>"), tag("</td>")),
         ),
     )
 }
 
 fn close_tr(input: &str) -> IResult<&str, ()> {
-    value((), tuple((multispace0, tag("</tr>"))))(input)
+    value((), (multispace0, tag("</tr>"))).parse(input)
 }
 
 type ValueMap<'a> = HashMap<&'a str, (&'a str, bool)>;
@@ -204,22 +206,22 @@ fn value_map_from_options(input: &str) -> AResult<ValueMap> {
             vm.insert(menu_item, (value, selected));
         }
         vm
-    })(input)
+    })
+    .parse(input)
     .map_err(|_| anyhow!("Could not parse {}", input))?
     .1)
 }
 
 fn option(input: &str) -> IResult<&str, (&str, bool, &str)> {
-    tuple((
+    (
         preceded(
-            tuple((multispace0, tag("<option value=\""))),
+            (multispace0, tag("<option value=\"")),
             take_until_and_consume("\""),
         ),
-        map(opt(tuple((multispace1, tag("selected=\"\"")))), |s| {
-            s.is_some()
-        }),
+        map(opt((multispace1, tag("selected=\"\""))), |s| s.is_some()),
         preceded(tag(">"), take_until_and_consume("</option>")),
-    ))(input)
+    )
+        .parse(input)
 }
 
 fn menu_item_for(race: &Race) -> &'static str {

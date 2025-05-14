@@ -9,8 +9,9 @@ use {
     },
     nom::{
         bytes::complete::{take, take_until},
+        error::Error,
         sequence::terminated,
-        IResult,
+        Parser as NomParser,
     },
     serde_json::value,
     std::{
@@ -100,7 +101,7 @@ impl ElementExt for Element {
 #[allow(clippy::needless_lifetimes)]
 fn take_until_and_consume<'a>(
     tag_to_match: &'a str,
-) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+) -> impl NomParser<&'a str, Error = Error<&'a str>, Output = &'a str> {
     let len = tag_to_match.len();
 
     terminated(take_until(tag_to_match), take(len))
