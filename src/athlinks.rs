@@ -42,6 +42,7 @@ impl Params {
             KotH => Self::new_koth(opt),
             RioGrande => Self::new_rio_grande(opt),
             DoggieDash => Self::new_doggie_dash(opt),
+            RioDelLago => Self::new_rdl(opt),
             _ => bail!("{:?} is not athlinks", opt.event),
         }
     }
@@ -183,6 +184,21 @@ impl Params {
         Ok(Self {
             event_id: 68104,
             second_id: 1094706,
+            race: opt.race,
+            year: opt.year,
+        })
+    }
+
+    fn new_rdl(opt: Opt) -> AResult<Self> {
+        use Race::*;
+
+        if let Full = opt.race {
+        } else {
+            bail!("Only the full is available");
+        }
+        Ok(Self {
+            event_id: 63638,
+            second_id: 991871,
             race: opt.race,
             year: opt.year,
         })
@@ -477,7 +493,7 @@ impl RaceExt for Race {
     fn li_text(&self) -> &'static [&'static str] {
         use Race::*;
         match self {
-            Full => &["Marathon"],
+            Full => &["Marathon", "100 Mile Endurance Run"],
             Half => &["Half Marathon", "Lovelace Rio Grande Half Marathon"],
             Relay => unreachable!(),
             TenK => &["10K Timed", "10K Run", "10k"],
