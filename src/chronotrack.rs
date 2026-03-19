@@ -198,7 +198,7 @@ fn close_tr(input: &str) -> IResult<&str, ()> {
 
 type ValueMap<'a> = HashMap<&'a str, (&'a str, bool)>;
 
-fn value_map_from_options(input: &str) -> AResult<ValueMap> {
+fn value_map_from_options(input: &str) -> AResult<ValueMap<'_>> {
     Ok(map(all_consuming(many1(option)), |v| {
         let mut vm = ValueMap::new();
 
