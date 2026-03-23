@@ -21,9 +21,24 @@ pub struct Params {
     participant: bool,
 }
 
-static SOLO_MALE_HEAVIES: [&str; 2] = [
+static SOLO_MALE_CIVILIAN_HEAVIES: [&str; 2] = [
     "CIVILIAN Male Heavy",            // 2016
     "Individual CIVILIAN Male Heavy", // 2017 - 2019
+];
+
+static SOLO_MALE_MILITARY_HEAVIES: [&str; 2] = [
+    "MILITARY Male Heavy",            // 2016
+    "Individual MILITARY Male Heavy", // 2017 - 2019
+];
+
+static SOLO_MALE_ROTC_HEAVIES: [&str; 2] = [
+    "ROTC Male Heavy",            // 2016
+    "Individual ROTC Male Heavy", // 2017 - 2019
+];
+
+static SOLO_FEMALE_MILITARY_HEAVIES: [&str; 2] = [
+    "MILITARY Female Heavy",            // 2016
+    "Individual MILITARY Female Heavy", // 2017 - 2019
 ];
 
 impl Params {
@@ -40,8 +55,11 @@ impl Params {
         use Race::*;
 
         let race_menus = match opt.race {
-            SoloMaleHeavy => &SOLO_MALE_HEAVIES[..],
-            _ => bail!("Only solo-male-heavy is available"),
+            SoloMaleCivilianHeavy => &SOLO_MALE_CIVILIAN_HEAVIES[..],
+            SoloMaleMilitaryHeavy => &SOLO_MALE_MILITARY_HEAVIES[..],
+            SoloFemaleMilitaryHeavy => &SOLO_FEMALE_MILITARY_HEAVIES[..],
+            SoloMaleROTCHeavy => &SOLO_MALE_ROTC_HEAVIES[..],
+            _ => bail!("Only some are available (see the source code)"),
         };
 
         Ok(Self {

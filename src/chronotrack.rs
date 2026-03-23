@@ -235,7 +235,10 @@ fn menu_item_for(race: &Race) -> &'static str {
         FiveK => "Shiprock 5k",
         Handcycle => "Shiprock Marathon Handcycle",
         TenKRuck => panic!("No 10k ruck at Shiprock"),
-        SoloMaleHeavy => panic!("solo-male-heavey is a temporary hack"),
+        SoloMaleCivilianHeavy
+        | SoloMaleMilitaryHeavy
+        | SoloMaleROTCHeavy
+        | SoloFemaleMilitaryHeavy => panic!("BMDM temporary hack"),
     }
 }
 

@@ -492,7 +492,10 @@ impl RaceExt for Race {
             ],
             Handcycle => unreachable!(),
             TenKRuck => &["10k Rucksack"],
-            SoloMaleHeavy => unreachable!(),
+            SoloMaleCivilianHeavy
+            | SoloMaleMilitaryHeavy
+            | SoloMaleROTCHeavy
+            | SoloFemaleMilitaryHeavy => unreachable!(),
         }
     }
 }

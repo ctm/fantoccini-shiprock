@@ -135,7 +135,10 @@ pub enum Race {
     FiveK,
     Handcycle,
     TenKRuck,
-    SoloMaleHeavy, // TEMPORARY HACK
+    SoloMaleCivilianHeavy,   // TEMPORARY HACK
+    SoloMaleMilitaryHeavy,   // TEMPORARY HACK
+    SoloMaleROTCHeavy,       // TEMPORARY HACK
+    SoloFemaleMilitaryHeavy, // TEMPORARY HACK
 }
 
 #[derive(Debug)]
@@ -164,7 +167,10 @@ impl FromStr for Race {
             "5k" => Ok(FiveK),
             "handcycle" => Ok(Handcycle),
             "10kruck" => Ok(TenKRuck),
-            "solo-male-heavy" => Ok(SoloMaleHeavy),
+            "solo-civilian-male-heavy" => Ok(SoloMaleCivilianHeavy),
+            "solo-military-male-heavy" => Ok(SoloMaleMilitaryHeavy),
+            "solo-military-female-heavy" => Ok(SoloFemaleMilitaryHeavy),
+            "solo-rotc-male-heavy" => Ok(SoloMaleROTCHeavy),
             _ => Err(ParseRaceError),
         }
     }
