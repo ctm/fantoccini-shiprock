@@ -17,6 +17,14 @@ async-trait = "0.1.89"
 futures = "0.3.32"
 anyhow = "1.0.102"
 
+[[bin]]
+name = "fantoccini_shiprock"
+path = "src/main.rs"
+
+[[bin]]
+name = "jmtr_csv"
+path = "src/jmtr_csv.rs"
+
 [dependencies.tokio]
 version = "1.50.0"
 features = ["macros", "time", "rt-multi-thread"]

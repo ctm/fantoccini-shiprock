@@ -24,6 +24,7 @@ use {
 mod athlinks;
 mod chronotrack;
 mod its_your_race;
+mod jmtr;
 mod ultrasignup;
 
 #[tokio::main]
@@ -55,6 +56,7 @@ async fn main() -> AResult<()> {
         }
         Moab240 | JJ100 | DPTR | BosqueBigfoot => Box::new(ultrasignup::Params::new(opt)?),
         BMDM => Box::new(its_your_race::Params::new(opt)?),
+        Jmtr => Box::new(jmtr::Params::new(opt)?),
     };
 
     let url = scraper.url();
@@ -131,9 +133,12 @@ pub enum Race {
     Full,
     Half,
     Relay,
+    #[value(name = "10k")]
     TenK,
+    #[value(name = "5k")]
     FiveK,
     Handcycle,
+    #[value(name = "10kruck")]
     TenKRuck,
     SoloMaleCivilianHeavy,   // TEMPORARY HACK
     SoloMaleMilitaryHeavy,   // TEMPORARY HACK
@@ -208,6 +213,7 @@ pub enum Event {
     BMDM,
     RioGrande,
     DoggieDash,
+    Jmtr,
 }
 
 #[derive(Debug)]
@@ -239,6 +245,7 @@ impl FromStr for Event {
             "bmdm" => Ok(BMDM),
             "riogrande" => Ok(RioGrande),
             "doggie" => Ok(DoggieDash),
+            "jmtr" => Ok(Jmtr),
             _ => Err(ParseEventError),
         }
     }
