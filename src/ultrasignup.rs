@@ -69,7 +69,7 @@ impl Params {
             .find_all(Css(css))
             .map_err(Into::<anyhow::Error>::into)
             .and_then(|v| async move {
-                let stream = stream::iter(v.into_iter()).filter_map(|e| async move {
+                let stream = stream::iter(v).filter_map(|e| async move {
                     match e.text().await {
                         Err(err) => Some(Err(Into::<anyhow::Error>::into(err))),
                         Ok(t) => {
@@ -125,7 +125,7 @@ impl Scraper for Params {
             .find_all(Css("table#list tbody tr"))
             .map_err(|e| e.into())
             .and_then(|v| async move {
-                stream::iter(v.into_iter())
+                stream::iter(v)
                     .filter_map(
                         |e| async move { PlacementOrStatus::from_element(e).await.transpose() },
                     )
@@ -213,7 +213,7 @@ impl PlacementOrStatus {
         e.find_all(Css("td"))
             .map_err(Into::<anyhow::Error>::into)
             .and_then(|v| async move {
-                stream::iter(v.into_iter())
+                stream::iter(v)
                     .filter_map(|e| async move { Some(e.text().await) })
                     .try_collect::<Vec<_>>()
                     .await
